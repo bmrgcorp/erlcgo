@@ -142,3 +142,42 @@ type RateLimiter struct {
 	mu     sync.RWMutex
 	limits map[string]*RateLimit
 }
+
+// CacheConfig represents cache configuration for different endpoints
+type CacheConfig struct {
+	// Enabled determines if caching is enabled
+	Enabled bool
+
+	// TTL is the time-to-live for cached items
+	// Items older than TTL are considered stale and will be refetched
+	TTL time.Duration
+
+	// StaleIfError determines if stale items should be returned when errors occur
+	// This can help maintain availability during API outages
+	StaleIfError bool
+
+	// Cache is the cache implementation to use
+	// Must implement the Cache interface
+	Cache Cache
+
+	// Prefix is prepended to all cache keys
+	// Useful when sharing a cache between multiple clients
+	Prefix string
+
+	// MaxItems is the maximum number of items to store in the cache
+	// Once exceeded, least recently used items will be evicted
+	// Zero means no limit
+	MaxItems int
+}
+
+// DefaultCacheConfig returns a default cache configuration
+func DefaultCacheConfig() *CacheConfig {
+	return &CacheConfig{
+		Enabled:      true,
+		TTL:          time.Minute * 5,
+		StaleIfError: true,
+		Cache:        NewMemoryCache(),
+		Prefix:       "erlcgo:",
+		MaxItems:     1000,
+	}
+}

@@ -16,25 +16,35 @@ func main() {
 		log.Fatal("ERLC_API_KEY environment variable is required")
 	}
 
+	cacheConfig := &erlcgo.CacheConfig{
+		Enabled:      true,
+		StaleIfError: true,
+		TTL:          time.Second * 1,
+		Cache:        erlcgo.NewMemoryCache(),
+	}
+
 	client := erlcgo.NewClient(
 		apiKey,
 		erlcgo.WithTimeout(time.Second*15),
 		erlcgo.WithRequestQueue(2, time.Millisecond*200),
+		erlcgo.WithCache(cacheConfig),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
+	ctx := context.Background()
 
-	players, err := client.GetPlayers(ctx)
-	if err != nil {
-		if apiErr, ok := err.(*erlcgo.APIError); ok {
-			log.Fatalf("API Error (%d): %s\nFriendly message: %s",
-				apiErr.Code,
-				apiErr.Error(),
-				erlcgo.GetFriendlyErrorMessage(apiErr))
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		start := time.Now()
+		players, err := client.GetPlayers(ctx)
+		duration := time.Since(start)
+
+		if err != nil {
+			log.Printf("Error: %v", err)
+			continue
 		}
-		log.Fatalf("Error: %v", err)
-	}
 
-	fmt.Printf("Players online: %d\n", len(players))
+		fmt.Printf("Players online: %d (took %v)\n", len(players), duration)
+	}
 }

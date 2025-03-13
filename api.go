@@ -163,6 +163,18 @@ func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 func (c *Client) doRequest(req *http.Request, v interface{}) error {
 	req.Header.Set("Server-Key", c.apiKey)
 
+	if c.cache.Enabled && req.Method == http.MethodGet {
+		cacheKey := c.cache.Prefix + req.URL.String()
+		if cached, ok := c.cache.Cache.Get(cacheKey); ok {
+			if v != nil {
+				// Copy cached data to the target
+				data, _ := json.Marshal(cached)
+				return json.Unmarshal(data, v)
+			}
+			return nil
+		}
+	}
+
 	execute := func() error {
 		// Always check global rate limit
 		if wait, shouldWait := c.rateLimiter.ShouldWait("global"); shouldWait {
@@ -193,6 +205,16 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 
 		if resp.StatusCode != http.StatusOK {
+			if c.cache.StaleIfError {
+				// Try to return stale data on error
+				if cached, ok := c.cache.Cache.Get(c.cache.Prefix + req.URL.String()); ok {
+					if v != nil {
+						data, _ := json.Marshal(cached)
+						return json.Unmarshal(data, v)
+					}
+					return nil
+				}
+			}
 			var apiError APIError
 			if err := json.NewDecoder(resp.Body).Decode(&apiError); err != nil {
 				return fmt.Errorf("unknown error (status %d)", resp.StatusCode)
@@ -200,8 +222,19 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 			return &apiError
 		}
 
-		if v != nil {
-			return json.NewDecoder(resp.Body).Decode(v)
+		if resp.StatusCode == http.StatusOK && v != nil {
+			var rawData interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
+				return err
+			}
+
+			if c.cache.Enabled && req.Method == http.MethodGet {
+				c.cache.Cache.Set(c.cache.Prefix+req.URL.String(), rawData, c.cache.TTL)
+			}
+
+			// Convert the raw data back to the target type
+			data, _ := json.Marshal(rawData)
+			return json.Unmarshal(data, v)
 		}
 		return nil
 	}

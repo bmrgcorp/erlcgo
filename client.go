@@ -25,6 +25,7 @@ type Client struct {
 	apiKey      string
 	rateLimiter *RateLimiter
 	queue       *RequestQueue
+	cache       *CacheConfig
 }
 
 // ClientOption allows customizing the client's behavior.
@@ -47,6 +48,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		baseURL:     "https://api.policeroleplay.community/v1",
 		apiKey:      apiKey,
 		rateLimiter: NewRateLimiter(),
+		cache:       DefaultCacheConfig(),
 	}
 
 	for _, opt := range opts {
@@ -92,5 +94,21 @@ func WithRequestQueue(workers int, interval time.Duration) ClientOption {
 	return func(c *Client) {
 		c.queue = NewRequestQueue(workers, interval)
 		c.queue.Start()
+	}
+}
+
+// WithCache enables caching with the specified configuration.
+//
+// Example:
+//
+//	cacheConfig := &CacheConfig{
+//	    Enabled:      true,
+//	    StaleIfError: true,
+//	    TTL:          time.Second * 1,
+//	    Cache:        NewMemoryCache(),
+//	}
+func WithCache(config *CacheConfig) ClientOption {
+	return func(c *Client) {
+		c.cache = config
 	}
 }
