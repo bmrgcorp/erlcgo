@@ -181,3 +181,77 @@ func DefaultCacheConfig() *CacheConfig {
 		MaxItems:     1000,
 	}
 }
+
+// Event-related types
+type EventType string
+
+const (
+	EventTypePlayers  EventType = "players"
+	EventTypeCommands EventType = "commands"
+	EventTypeModCalls EventType = "modcalls"
+	EventTypeKills    EventType = "kills"
+	EventTypeJoins    EventType = "joins"
+	EventTypeVehicles EventType = "vehicles"
+)
+
+type Event struct {
+	Type EventType
+	Data interface{}
+}
+
+// Event handler types for type-safety
+type PlayerEventHandler func([]PlayerEvent)
+type CommandEventHandler func([]ERLCCommandLog)
+type KillEventHandler func([]ERLCKillLog)
+type ModCallEventHandler func([]ERLCModCallLog)
+type JoinEventHandler func([]ERLCJoinLog)
+type VehicleEventHandler func([]ERLCVehicle)
+
+// HandlerRegistration stores handler functions for each event type
+type HandlerRegistration struct {
+	PlayerHandler  PlayerEventHandler
+	CommandHandler CommandEventHandler
+	KillHandler    KillEventHandler
+	ModCallHandler ModCallEventHandler
+	JoinHandler    JoinEventHandler
+	VehicleHandler VehicleEventHandler
+}
+
+type PlayerEvent struct {
+	Player ERLCServerPlayer
+	Type   string // "join" or "leave"
+}
+
+// EventConfig provides configuration options for event subscriptions
+type EventConfig struct {
+	PollInterval        time.Duration
+	BufferSize          int
+	RetryOnError        bool
+	RetryInterval       time.Duration
+	FilterFunc          func(Event) bool
+	IncludeInitialState bool
+	BatchEvents         bool
+	BatchWindow         time.Duration
+	LogErrors           bool
+	ErrorHandler        func(error)
+	TimeFormat          string
+}
+
+// Internal types for subscription handling
+type playerSet map[string]struct{}
+
+type lastState struct {
+	players     playerSet
+	commandTime int64
+	modCallTime int64
+	killTime    int64
+	joinTime    int64
+	vehicleSet  map[string]struct{}
+	initialized bool
+}
+
+type Subscription struct {
+	Events   chan Event
+	done     chan struct{}
+	handlers HandlerRegistration
+}
