@@ -165,23 +165,38 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		return fmt.Errorf("request cannot be nil")
 	}
 
+	if c.httpClient == nil {
+		return fmt.Errorf("http client is nil - was NewClient() used to create the client?")
+	}
+
 	req.Header.Set("Server-Key", c.apiKey)
 
-	if c.cache != nil && c.cache.Enabled && req.Method == http.MethodGet {
-		cacheKey := c.cache.Prefix + req.URL.String()
-		if cached, ok := c.cache.Cache.Get(cacheKey); ok {
-			if v != nil {
-				// Copy cached data to the target
-				data, _ := json.Marshal(cached)
-				return json.Unmarshal(data, v)
+	if c.apiKey == "" {
+		return fmt.Errorf("API key is empty")
+	}
+
+	if c.cache != nil && c.cache.Enabled {
+		if c.cache.Cache == nil {
+			c.cache.Cache = NewMemoryCache()
+		}
+
+		if req.Method == http.MethodGet {
+			cacheKey := c.cache.Prefix + req.URL.String()
+			if cached, ok := c.cache.Cache.Get(cacheKey); ok {
+				if v != nil {
+					data, err := json.Marshal(cached)
+					if err != nil {
+						return fmt.Errorf("failed to marshal cached data: %w", err)
+					}
+					return json.Unmarshal(data, v)
+				}
+				return nil
 			}
-			return nil
 		}
 	}
 
 	execute := func() error {
 		if c.rateLimiter != nil {
-			// Always check global rate limit
 			if wait, shouldWait := c.rateLimiter.ShouldWait("global"); shouldWait {
 				time.Sleep(wait)
 			}
@@ -200,7 +215,6 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 		defer resp.Body.Close()
 
-		// Update rate limit info from headers
 		if c.rateLimiter != nil && resp.Header.Get("X-RateLimit-Remaining") != "" {
 			rem, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
 			limit, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Limit"))
@@ -211,7 +225,6 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		if resp.StatusCode == 429 {
 			var rateLimitError APIError
 			if err := json.NewDecoder(resp.Body).Decode(&rateLimitError); err == nil && c.rateLimiter != nil {
-				// Add extra delay when we hit the rate limit
 				c.rateLimiter.UpdateFromHeaders("global", 0, 0, time.Now().Add(time.Second*5))
 				return &rateLimitError
 			}
@@ -245,7 +258,6 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 				c.cache.Cache.Set(c.cache.Prefix+req.URL.String(), rawData, c.cache.TTL)
 			}
 
-			// Convert the raw data back to the target type
 			data, err := json.Marshal(rawData)
 			if err != nil {
 				return fmt.Errorf("failed to marshal data: %w", err)

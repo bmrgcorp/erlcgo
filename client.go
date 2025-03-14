@@ -41,6 +41,14 @@ type ClientOption func(*Client)
 //	    WithBaseURL("https://custom-url.com"),
 //	)
 func NewClient(apiKey string, opts ...ClientOption) *Client {
+	if apiKey == "" {
+		panic("API key is required")
+	}
+
+	// Create default cache config but disable it by default
+	defaultCache := DefaultCacheConfig()
+	defaultCache.Enabled = false
+
 	c := &Client{
 		httpClient: &http.Client{
 			Timeout: time.Second * 10,
@@ -48,11 +56,17 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		baseURL:     "https://api.policeroleplay.community/v1",
 		apiKey:      apiKey,
 		rateLimiter: NewRateLimiter(),
-		cache:       DefaultCacheConfig(),
+		cache:       defaultCache,
 	}
 
+	// Apply custom options
 	for _, opt := range opts {
 		opt(c)
+	}
+
+	// Initialize cache if enabled
+	if c.cache != nil && c.cache.Enabled && c.cache.Cache == nil {
+		c.cache.Cache = NewMemoryCache()
 	}
 
 	return c
