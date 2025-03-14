@@ -387,7 +387,7 @@ All client methods are safe for concurrent use. The client handles:
 - Response parsing
 - Error handling
 
-### Contributing
+## Contributing
 
 We welcome contributions of all kinds, whether it's bug fixes, new features, or documentation improvements. To contribute, please follow these steps:
 
@@ -407,7 +407,7 @@ We welcome contributions of all kinds, whether it's bug fixes, new features, or 
 
 We appreciate all contributions and will review PRs as soon as possible.
 
-### Bug Reports
+## Bug Reports
 
 If you encounter a bug, you have two options for reporting it:
 
