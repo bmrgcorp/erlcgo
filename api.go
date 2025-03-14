@@ -161,9 +161,13 @@ func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 // doRequest is an internal helper method that executes HTTP requests.
 // It handles authorization, rate limiting, and error parsing.
 func (c *Client) doRequest(req *http.Request, v interface{}) error {
+	if req == nil {
+		return fmt.Errorf("request cannot be nil")
+	}
+
 	req.Header.Set("Server-Key", c.apiKey)
 
-	if c.cache.Enabled && req.Method == http.MethodGet {
+	if c.cache != nil && c.cache.Enabled && req.Method == http.MethodGet {
 		cacheKey := c.cache.Prefix + req.URL.String()
 		if cached, ok := c.cache.Cache.Get(cacheKey); ok {
 			if v != nil {
@@ -176,20 +180,29 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 	}
 
 	execute := func() error {
-		// Always check global rate limit
-		if wait, shouldWait := c.rateLimiter.ShouldWait("global"); shouldWait {
-			time.Sleep(wait)
+		if c.rateLimiter != nil {
+			// Always check global rate limit
+			if wait, shouldWait := c.rateLimiter.ShouldWait("global"); shouldWait {
+				time.Sleep(wait)
+			}
+		}
+
+		if c.httpClient == nil {
+			return fmt.Errorf("http client not initialized")
 		}
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			return fmt.Errorf("request failed: %w", err)
 		}
+		if resp == nil {
+			return fmt.Errorf("received nil response")
+		}
 		defer resp.Body.Close()
 
 		// Update rate limit info from headers
-		if remaining := resp.Header.Get("X-RateLimit-Remaining"); remaining != "" {
-			rem, _ := strconv.Atoi(remaining)
+		if c.rateLimiter != nil && resp.Header.Get("X-RateLimit-Remaining") != "" {
+			rem, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
 			limit, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Limit"))
 			reset, _ := strconv.ParseInt(resp.Header.Get("X-RateLimit-Reset"), 10, 64)
 			c.rateLimiter.UpdateFromHeaders("global", limit, rem, time.Unix(reset, 0))
@@ -197,7 +210,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 
 		if resp.StatusCode == 429 {
 			var rateLimitError APIError
-			if err := json.NewDecoder(resp.Body).Decode(&rateLimitError); err == nil {
+			if err := json.NewDecoder(resp.Body).Decode(&rateLimitError); err == nil && c.rateLimiter != nil {
 				// Add extra delay when we hit the rate limit
 				c.rateLimiter.UpdateFromHeaders("global", 0, 0, time.Now().Add(time.Second*5))
 				return &rateLimitError
@@ -205,7 +218,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			if c.cache.StaleIfError {
+			if c.cache != nil && c.cache.StaleIfError {
 				// Try to return stale data on error
 				if cached, ok := c.cache.Cache.Get(c.cache.Prefix + req.URL.String()); ok {
 					if v != nil {
@@ -225,16 +238,21 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		if resp.StatusCode == http.StatusOK && v != nil {
 			var rawData interface{}
 			if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
-				return err
+				return fmt.Errorf("failed to decode response: %w", err)
 			}
 
-			if c.cache.Enabled && req.Method == http.MethodGet {
+			if c.cache != nil && c.cache.Enabled && req.Method == http.MethodGet {
 				c.cache.Cache.Set(c.cache.Prefix+req.URL.String(), rawData, c.cache.TTL)
 			}
 
 			// Convert the raw data back to the target type
-			data, _ := json.Marshal(rawData)
-			return json.Unmarshal(data, v)
+			data, err := json.Marshal(rawData)
+			if err != nil {
+				return fmt.Errorf("failed to marshal data: %w", err)
+			}
+			if err := json.Unmarshal(data, v); err != nil {
+				return fmt.Errorf("failed to unmarshal data: %w", err)
+			}
 		}
 		return nil
 	}
