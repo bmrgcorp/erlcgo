@@ -289,7 +289,7 @@ client := erlcgo.NewClient("your-api-key",
    ```
 
 ## Contributing
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Make sure to read our Code of Conduct before contributing.
 
 ## Support
 For support, bug reports, or feature requests, please:
