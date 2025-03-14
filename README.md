@@ -3,6 +3,7 @@
 A powerful, feature-rich Go client for the Emergency Response: Liberty County (ER:LC) API with built-in concurrency safety, automatic rate limiting, real-time events, and caching support.
 
 ## Table of Contents
+
 - [Features](#features)
 - [Installation](#installation)
 - [Basic Usage](#basic-usage)
@@ -16,9 +17,11 @@ A powerful, feature-rich Go client for the Emergency Response: Liberty County (E
 - [Caching](#caching)
 - [Best Practices](#best-practices)
 - [Contributing](#contributing)
-- [Support](#support)
+- [Bug Reports](#bug-reports)
+- [License](#license)
 
 ## Features
+
 - 🌟 Complete ERLC API coverage with type safety
 - 📡 Real-time event system with type-safe handlers
 - 🚦 Smart rate limiting with automatic backoff
@@ -30,6 +33,7 @@ A powerful, feature-rich Go client for the Emergency Response: Liberty County (E
 - 🎯 Zero external dependencies
 
 ## Installation
+
 ```bash
 go get github.com/bmrgcorp/erlcgo
 ```
@@ -219,13 +223,16 @@ if err != nil {
 ```
 
 ## Rate Limiting
+
 The client automatically handles rate limits by:
+
 - Tracking rate limit headers
 - Implementing exponential backoff
 - Queuing requests when limits are hit
 - Providing real-time rate limit status
 
 ## Request Queueing
+
 Enable automatic request queueing to prevent rate limits:
 
 ```go
@@ -235,6 +242,7 @@ client := erlcgo.NewClient("your-api-key",
 ```
 
 ## Caching
+
 Configure caching to improve performance and reduce API calls:
 
 ```go
@@ -251,12 +259,14 @@ client := erlcgo.NewClient("your-api-key",
 ## Best Practices
 
 1. **Use Contexts for Control**
+
    ```go
    ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
    defer cancel()
    ```
 
 2. **Handle Rate Limits**
+
    ```go
    client := erlcgo.NewClient("your-api-key",
        erlcgo.WithRequestQueue(1, time.Second),
@@ -264,6 +274,7 @@ client := erlcgo.NewClient("your-api-key",
    ```
 
 3. **Enable Caching**
+
    ```go
    client := erlcgo.NewClient("your-api-key",
        erlcgo.WithCache(&erlcgo.CacheConfig{
@@ -274,6 +285,7 @@ client := erlcgo.NewClient("your-api-key",
    ```
 
 4. **Clean Up Resources**
+
    ```go
    defer sub.Close()
    defer cancel()
@@ -289,12 +301,38 @@ client := erlcgo.NewClient("your-api-key",
    ```
 
 ## Contributing
-We welcome contributions! Make sure to read our Code of Conduct before contributing.
 
-## Support
-For support, bug reports, or feature requests, please:
-1. Check existing [GitHub Issues](https://github.com/bmrgcorp/erlcgo/issues)
-2. Open a new issue with detailed information
+We welcome contributions of all kinds, whether it's bug fixes, new features, or documentation improvements. To contribute, please follow these steps:
+
+1. **Fork the Repository** – Create your own copy of the project.
+2. **Create a Branch** – Work on a separate branch for your changes:
+   ```bash
+   git checkout -b feature-or-fix-name
+   ```
+3. **Make Your Changes** – Ensure your code follows the project's style and guidelines.
+4. **Test Thoroughly** – If applicable, add tests to verify your changes.
+5. **Commit and Push** – Keep commits clear and concise:
+   ```bash
+   git commit -m "Brief description of changes"
+   git push origin feature-or-fix-name
+   ```
+6. **Open a Pull Request** – Submit your changes for review. Ensure your PR includes a clear description of the changes and any relevant issue references.
+
+We appreciate all contributions and will review PRs as soon as possible.
+
+## Bug Reports
+
+If you encounter a bug, you have two options for reporting it:
+
+1. **Submit a Fix** – If you're able to resolve the issue, open a pull request with your fix following the contributing guidelines above.
+2. **Request Support** – If you're unable to fix the issue yourself, report it in our [support server](https://discord.gg/boomerang) via the support forum. Please include:
+   - A clear description of the issue
+   - Steps to reproduce it
+   - Expected vs actual behaviour
+   - Any relevant error messages or logs
+
+By keeping reports detailed, we can resolve issues more efficiently.
 
 ## License
+
 APACHE 2.0 License - see [LICENSE](LICENSE) for details
