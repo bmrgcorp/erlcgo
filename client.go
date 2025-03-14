@@ -1,4 +1,4 @@
-// Package erlcgo provides a Go client for interacting with the East Coast Roleplaying (ERLC) API.
+// Package erlcgo provides a Go client for interacting with the Emergency Response: Liberty County (ER:LC) API.
 //
 // Basic usage:
 //
