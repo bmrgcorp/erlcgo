@@ -175,6 +175,11 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		return fmt.Errorf("API key is empty")
 	}
 
+	// Set global API key in Authorization header if provided
+	if c.globalAPIKey != "" {
+		req.Header.Set("Authorization", c.globalAPIKey)
+	}
+
 	if c.cache != nil && c.cache.Enabled {
 		if c.cache.Cache == nil {
 			c.cache.Cache = NewMemoryCache()
