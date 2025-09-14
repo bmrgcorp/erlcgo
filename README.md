@@ -52,9 +52,10 @@ import (
 
 func main() {
     // Initialize client with options
-    client := erlcgo.NewClient("your-api-key",
+    client := erlcgo.NewClient("your-server-key",
         erlcgo.WithTimeout(time.Second*15),
         erlcgo.WithRequestQueue(2, time.Second),
+        erlcgo.WithGlobalAPIKey("your-global-key"), // Optional global API key
         erlcgo.WithCache(&erlcgo.CacheConfig{
             Enabled: true,
             TTL:     time.Minute,
@@ -99,10 +100,31 @@ func main() {
 }
 ```
 
+## Authentication
+
+The ERLC API uses two types of API keys:
+
+- **Server Key** (required): Identifies your specific server and is sent in the `Server-Key` header
+- **Global API Key** (optional): Provides higher rate limits for large applications and is sent in the `Authorization` header
+
+
+```go
+// Without global API key
+client := erlcgo.NewClient("your-server-key")
+
+// With global API key (for large applications serving 150+ servers)
+client := erlcgo.NewClient("your-server-key",
+    erlcgo.WithGlobalAPIKey("your-global-key"),
+)
+```
+
 ## Client Configuration
 
 ```go
-client := erlcgo.NewClient("your-api-key",
+client := erlcgo.NewClient("your-server-key",
+    // Global API key (optional)
+    erlcgo.WithGlobalAPIKey("your-global-key"),
+
     // Custom HTTP client
     erlcgo.WithHTTPClient(&http.Client{
         Timeout: time.Second * 30,
@@ -268,7 +290,7 @@ client := erlcgo.NewClient("your-api-key",
 2. **Handle Rate Limits**
 
    ```go
-   client := erlcgo.NewClient("your-api-key",
+   client := erlcgo.NewClient("your-server-key",
        erlcgo.WithRequestQueue(1, time.Second),
    )
    ```
@@ -276,7 +298,7 @@ client := erlcgo.NewClient("your-api-key",
 3. **Enable Caching**
 
    ```go
-   client := erlcgo.NewClient("your-api-key",
+   client := erlcgo.NewClient("your-server-key",
        erlcgo.WithCache(&erlcgo.CacheConfig{
            Enabled: true,
            TTL:    time.Minute * 5,
