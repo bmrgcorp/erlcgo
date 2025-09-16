@@ -2,7 +2,12 @@
 //
 // Basic usage:
 //
-//	client := erlcgo.NewClient("your-api-key")
+//	client := erlcgo.NewClient("your-server-key")
+//
+//	// With optional global API key:
+//	client := erlcgo.NewClient("your-server-key",
+//	    erlcgo.WithGlobalAPIKey("your-global-key"),
+//	)
 //
 //	// Get players
 //	players, err := client.GetPlayers(context.Background())
@@ -20,29 +25,31 @@ import (
 // It handles authentication, rate limiting, and request execution.
 // Create a new client using NewClient().
 type Client struct {
-	httpClient  *http.Client
-	baseURL     string
-	apiKey      string
-	rateLimiter *RateLimiter
-	queue       *RequestQueue
-	cache       *CacheConfig
+	httpClient   *http.Client
+	baseURL      string
+	apiKey       string
+	globalAPIKey string
+	rateLimiter  *RateLimiter
+	queue        *RequestQueue
+	cache        *CacheConfig
 }
 
 // ClientOption allows customizing the client's behavior.
 // Use the With* functions to create options.
 type ClientOption func(*Client)
 
-// NewClient creates a new ERLC API client with the given API key and options.
+// NewClient creates a new ERLC API client with the given server key and options.
 //
 // Example:
 //
-//	client := NewClient("your-api-key",
+//	client := NewClient("your-server-key",
 //	    WithTimeout(time.Second*15),
 //	    WithBaseURL("https://custom-url.com"),
+//	    WithGlobalAPIKey("your-global-key"),
 //	)
 func NewClient(apiKey string, opts ...ClientOption) *Client {
 	if apiKey == "" {
-		panic("API key is required")
+		panic("server key is required")
 	}
 
 	// Create default cache config but disable it by default
@@ -124,5 +131,19 @@ func WithRequestQueue(workers int, interval time.Duration) ClientOption {
 func WithCache(config *CacheConfig) ClientOption {
 	return func(c *Client) {
 		c.cache = config
+	}
+}
+
+// WithGlobalAPIKey sets a global API key for higher rate limits.
+// The global API key is sent in the Authorization header.
+//
+// Example:
+//
+//	client := NewClient("your-server-key",
+//	    WithGlobalAPIKey("your-global-key"),
+//	)
+func WithGlobalAPIKey(globalAPIKey string) ClientOption {
+	return func(c *Client) {
+		c.globalAPIKey = globalAPIKey
 	}
 }
