@@ -52,12 +52,16 @@ type CacheStats struct {
 	AvgTTL    time.Duration // Average TTL of cached items
 }
 
-// MemoryCache implements a simple in-memory cache
+// MemoryCache implements a simple in-memory cache with automatic expiration.
+// It runs a background goroutine that periodically removes expired items.
+// MemoryCache is safe for concurrent use by multiple goroutines.
 type MemoryCache struct {
-	mu      sync.RWMutex
-	items   map[string]*cacheItem
-	stats   CacheStats
-	onEvict func(key string, value interface{}) // Called when an item is evicted
+	mu       sync.RWMutex                    // Protects access to items and stats
+	items    map[string]*cacheItem           // The actual cache storage
+	stats    CacheStats                      // Cache statistics
+	onEvict  func(key string, value interface{}) // Optional callback invoked when items are evicted
+	stopCh   chan struct{}                   // Used to signal the cleanup goroutine to stop
+	stopOnce sync.Once                       // Ensures Close() only closes stopCh once, preventing panic
 }
 
 type cacheItem struct {
@@ -65,30 +69,55 @@ type cacheItem struct {
 	expiration time.Time
 }
 
-// NewMemoryCache creates a new MemoryCache instance
+// NewMemoryCache creates a new MemoryCache instance.
+// The cache starts a background goroutine that periodically removes expired items
+// (every minute). To prevent goroutine leaks, call Close() when the cache is no
+// longer needed, especially in long-running applications or when creating many
+// cache instances.
+//
+// Example:
+//
+//	cache := NewMemoryCache()
+//	defer cache.Close() // Always close to clean up the background goroutine
 func NewMemoryCache() *MemoryCache {
 	cache := &MemoryCache{
-		items: make(map[string]*cacheItem),
+		items:  make(map[string]*cacheItem),
+		stopCh: make(chan struct{}),
 	}
-	go cache.cleanupLoop()
+	go cache.cleanupLoop() // Start background cleanup goroutine
 	return cache
 }
 
 func (c *MemoryCache) Get(key string) (interface{}, bool) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	item, exists := c.items[key]
 	if !exists {
+		c.mu.RUnlock()
 		return nil, false
 	}
 
-	if time.Now().After(item.expiration) {
-		delete(c.items, key)
+	// Check if item has expired. If so, upgrade to write lock to delete it.
+	// This provides immediate expiration checking even between cleanup runs.
+	expired := time.Now().After(item.expiration)
+	if expired {
+		// Upgrade to write lock to delete the expired item
+		c.mu.RUnlock()
+		c.mu.Lock()
+		// Double-check expiration after acquiring write lock (item may have been
+		// deleted or updated by another goroutine)
+		if item, exists := c.items[key]; exists && time.Now().After(item.expiration) {
+			delete(c.items, key)
+			if c.onEvict != nil {
+				c.onEvict(key, item.value)
+			}
+		}
+		c.mu.Unlock()
 		return nil, false
 	}
 
-	return item.value, true
+	value := item.value
+	c.mu.RUnlock()
+	return value, true
 }
 
 func (c *MemoryCache) Set(key string, value interface{}, ttl time.Duration) {
@@ -107,17 +136,33 @@ func (c *MemoryCache) Delete(key string) {
 	delete(c.items, key)
 }
 
+// cleanupLoop runs in a background goroutine and periodically removes expired items.
+// It runs every minute until the cache is closed via Close(). When stopCh is closed,
+// the loop exits and the goroutine terminates, preventing goroutine leaks.
 func (c *MemoryCache) cleanupLoop() {
 	ticker := time.NewTicker(time.Minute)
-	for range ticker.C {
-		c.mu.Lock()
-		now := time.Now()
-		for key, item := range c.items {
-			if now.After(item.expiration) {
-				delete(c.items, key)
+	defer ticker.Stop() // Ensure ticker is stopped when goroutine exits
+
+	for {
+		select {
+		case <-ticker.C:
+			// Periodic cleanup: remove all expired items
+			c.mu.Lock()
+			now := time.Now()
+			for key, item := range c.items {
+				if now.After(item.expiration) {
+					delete(c.items, key)
+					// Call eviction callback if set
+					if c.onEvict != nil {
+						c.onEvict(key, item.value)
+					}
+				}
 			}
+			c.mu.Unlock()
+		case <-c.stopCh:
+			// Signal received to stop the cleanup loop
+			return
 		}
-		c.mu.Unlock()
 	}
 }
 
@@ -133,4 +178,30 @@ func (c *MemoryCache) WithEvictionCallback(fn func(key string, value interface{}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.onEvict = fn
+}
+
+// Close stops the background cleanup goroutine and releases resources.
+// After Close() is called, the cache will no longer automatically remove expired items,
+// though expired items will still be removed during Get() operations.
+//
+// It is safe to call Close() multiple times; subsequent calls are no-ops.
+// Once Close() is called, the cache should not be used further, though this is
+// not enforced.
+//
+// It is recommended to call Close() when the cache is no longer needed, especially
+// in long-running applications or when creating many cache instances, to prevent
+// goroutine leaks.
+//
+// Example:
+//
+//	cache := NewMemoryCache()
+//	// ... use cache ...
+//	cache.Close() // Clean up when done
+func (c *MemoryCache) Close() {
+	c.stopOnce.Do(func() {
+		// Close the channel to signal the cleanup goroutine to stop.
+		// Using sync.Once ensures we only close once, preventing panic from
+		// closing an already-closed channel.
+		close(c.stopCh)
+	})
 }
