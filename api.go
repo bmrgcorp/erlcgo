@@ -185,7 +185,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 			c.cache.Cache = NewMemoryCache()
 		}
 
-		if req.Method == http.MethodGet {
+		if req.Method == http.MethodGet && c.cache.Cache != nil {
 			cacheKey := c.cache.Prefix + req.URL.String()
 			if cached, ok := c.cache.Cache.Get(cacheKey); ok {
 				if v != nil {
@@ -236,7 +236,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			if c.cache != nil && c.cache.StaleIfError {
+			if c.cache != nil && c.cache.StaleIfError && c.cache.Cache != nil {
 				// Try to return stale data on error
 				if cached, ok := c.cache.Cache.Get(c.cache.Prefix + req.URL.String()); ok {
 					if v != nil {
@@ -259,7 +259,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 				return fmt.Errorf("failed to decode response: %w", err)
 			}
 
-			if c.cache != nil && c.cache.Enabled && req.Method == http.MethodGet {
+			if c.cache != nil && c.cache.Enabled && c.cache.Cache != nil && req.Method == http.MethodGet {
 				c.cache.Cache.Set(c.cache.Prefix+req.URL.String(), rawData, c.cache.TTL)
 			}
 
