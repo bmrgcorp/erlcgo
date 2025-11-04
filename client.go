@@ -147,3 +147,31 @@ func WithGlobalAPIKey(globalAPIKey string) ClientOption {
 		c.globalAPIKey = globalAPIKey
 	}
 }
+
+// Close stops background goroutines and releases resources associated with the client.
+// This includes closing the cache cleanup goroutine if caching is enabled, and stopping
+// the request queue if one was configured.
+//
+// It is safe to call Close() multiple times; subsequent calls are no-ops.
+// Once Close() is called, the client should not be used further, though this is
+// not enforced.
+//
+// It is recommended to call Close() when the client is no longer needed, especially
+// in long-running applications, to prevent goroutine leaks.
+//
+// Example:
+//
+//	client := NewClient("your-api-key")
+//	defer client.Close() // Clean up when done
+func (c *Client) Close() {
+	if c.cache != nil && c.cache.Cache != nil {
+		// Close the cache if it's a MemoryCache instance
+		if mc, ok := c.cache.Cache.(*MemoryCache); ok {
+			mc.Close()
+		}
+	}
+	if c.queue != nil {
+		// Stop the request queue if one was configured
+		c.queue.Stop()
+	}
+}

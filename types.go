@@ -170,13 +170,16 @@ type CacheConfig struct {
 	MaxItems int
 }
 
-// DefaultCacheConfig returns a default cache configuration
+// DefaultCacheConfig returns a default cache configuration.
+// Note: The Cache field is set to nil by default. A MemoryCache instance will be
+// created automatically when caching is enabled and a cache instance is needed.
+// This prevents creating unnecessary goroutines when caching is disabled.
 func DefaultCacheConfig() *CacheConfig {
 	return &CacheConfig{
 		Enabled:      true,
 		TTL:          time.Minute * 5,
 		StaleIfError: true,
-		Cache:        NewMemoryCache(),
+		Cache:        nil, // Will be created lazily when needed
 		Prefix:       "erlcgo:",
 		MaxItems:     1000,
 	}
