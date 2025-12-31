@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -220,22 +220,71 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 		defer resp.Body.Close()
 
-		if c.rateLimiter != nil && resp.Header.Get("X-RateLimit-Remaining") != "" {
-			rem, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
-			limit, _ := strconv.Atoi(resp.Header.Get("X-RateLimit-Limit"))
-			reset, _ := strconv.ParseInt(resp.Header.Get("X-RateLimit-Reset"), 10, 64)
-			c.rateLimiter.UpdateFromHeaders("global", limit, rem, time.Unix(reset, 0))
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
 		}
 
-		if resp.StatusCode == 429 {
-			var rateLimitError APIError
-			if err := json.NewDecoder(resp.Body).Decode(&rateLimitError); err == nil && c.rateLimiter != nil {
-				c.rateLimiter.UpdateFromHeaders("global", 0, 0, time.Now().Add(time.Second*5))
-				return &rateLimitError
+		rl := parseRateLimitHeaders(resp.Header)
+		ra := (*time.Duration)(nil)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			ra = parseRetryAfter(body)
+			if ra == nil {
+				ra = parseRetryAfterHeader(resp.Header)
+			}
+			if rl == nil || rl.Bucket == "" {
+				if bucket := parseRateLimitBucket(body); bucket != "" {
+					if rl == nil {
+						rl = &RateLimitInfo{Bucket: bucket}
+					} else {
+						rl.Bucket = bucket
+					}
+				}
 			}
 		}
 
-		if resp.StatusCode != http.StatusOK {
+		if c.rateLimiter != nil {
+			if rl != nil {
+				c.rateLimiter.UpdateFromHeaders("global", rl.Limit, rl.Remaining, rl.ResetAt)
+			} else if resp.StatusCode == http.StatusTooManyRequests {
+				if ra != nil {
+					c.rateLimiter.UpdateFromHeaders("global", 0, 0, time.Now().Add(*ra))
+				} else {
+					c.rateLimiter.UpdateFromHeaders("global", 0, 0, time.Now().Add(time.Second*5))
+				}
+			}
+		}
+
+		routeName := req.Method + " " + req.URL.Path
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			apiErr := &APIError{
+				StatusCode: resp.StatusCode,
+				Body:       body,
+				Headers:    resp.Header.Clone(),
+				RateLimit:  rl,
+				RetryAfter: ra,
+			}
+			if len(body) > 0 {
+				if err := json.Unmarshal(body, apiErr); err != nil {
+					apiErr.Message = string(body)
+				}
+			} else {
+				apiErr.Message = fmt.Sprintf("unknown error (status %d)", resp.StatusCode)
+			}
+
+			if c.responseHook != nil {
+				c.responseHook(ResponseMeta{
+					Route:      routeName,
+					StatusCode: resp.StatusCode,
+					Headers:    resp.Header.Clone(),
+					Body:       body,
+					RateLimit:  rl,
+					RetryAfter: ra,
+					Err:        apiErr,
+				})
+			}
+
 			if c.cache != nil && c.cache.StaleIfError && c.cache.Cache != nil {
 				// Try to return stale data on error
 				if cached, ok := c.cache.Cache.Get(c.cache.Prefix + req.URL.String()); ok {
@@ -246,16 +295,12 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 					return nil
 				}
 			}
-			var apiError APIError
-			if err := json.NewDecoder(resp.Body).Decode(&apiError); err != nil {
-				return fmt.Errorf("unknown error (status %d)", resp.StatusCode)
-			}
-			return &apiError
+			return apiErr
 		}
 
 		if resp.StatusCode == http.StatusOK && v != nil {
 			var rawData interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&rawData); err != nil {
+			if err := json.Unmarshal(body, &rawData); err != nil {
 				return fmt.Errorf("failed to decode response: %w", err)
 			}
 
@@ -271,6 +316,19 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 				return fmt.Errorf("failed to unmarshal data: %w", err)
 			}
 		}
+
+		if c.responseHook != nil {
+			c.responseHook(ResponseMeta{
+				Route:      routeName,
+				StatusCode: resp.StatusCode,
+				Headers:    resp.Header.Clone(),
+				Body:       nil,
+				RateLimit:  rl,
+				RetryAfter: nil,
+				Err:        nil,
+			})
+		}
+
 		return nil
 	}
 
@@ -279,3 +337,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 	}
 	return execute()
 }
+
+
+
+
