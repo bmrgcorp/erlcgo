@@ -2,6 +2,7 @@ package erlcgo
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -78,6 +79,16 @@ type APIError struct {
 	Message string `json:"message"`
 	// CommandID is the ID of the command that caused the error (if applicable)
 	CommandID string `json:"commandId,omitempty"`
+	// StatusCode is the HTTP status code returned by the API
+	StatusCode int `json:"-"`
+	// Body is the raw response body
+	Body []byte `json:"-"`
+	// Headers are the response headers
+	Headers http.Header `json:"-"`
+	// RateLimit contains parsed rate limit headers
+	RateLimit *RateLimitInfo `json:"-"`
+	// RetryAfter is the parsed retry_after value for 429 responses
+	RetryAfter *time.Duration `json:"-"`
 }
 
 // Error implements the error interface for APIError.
@@ -157,16 +168,12 @@ type CacheConfig struct {
 	StaleIfError bool
 
 	// Cache is the cache implementation to use
-	// Must implement the Cache interface
 	Cache Cache
 
 	// Prefix is prepended to all cache keys
-	// Useful when sharing a cache between multiple clients
 	Prefix string
 
 	// MaxItems is the maximum number of items to store in the cache
-	// Once exceeded, least recently used items will be evicted
-	// Zero means no limit
 	MaxItems int
 }
 
@@ -210,7 +217,6 @@ type ModCallEventHandler func([]ERLCModCallLog)
 type JoinEventHandler func([]ERLCJoinLog)
 type VehicleEventHandler func([]ERLCVehicle)
 
-// HandlerRegistration stores handler functions for each event type
 type HandlerRegistration struct {
 	PlayerHandler  PlayerEventHandler
 	CommandHandler CommandEventHandler
@@ -258,3 +264,7 @@ type Subscription struct {
 	done     chan struct{}
 	handlers HandlerRegistration
 }
+
+
+
+
