@@ -32,6 +32,7 @@ type Client struct {
 	rateLimiter  *RateLimiter
 	queue        *RequestQueue
 	cache        *CacheConfig
+	responseHook ResponseHook
 }
 
 // ClientOption allows customizing the client's behavior.
@@ -102,19 +103,10 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 	}
 }
 
-// WithRequestQueue enables request queueing with the specified number of workers
-// and interval between requests. This helps prevent rate limit issues by spacing
-// out requests.
-//
-// Example:
-//
-//	client := NewClient("your-api-key",
-//	    WithRequestQueue(2, time.Millisecond*200), // 2 workers, 200ms between requests
-//	)
-func WithRequestQueue(workers int, interval time.Duration) ClientOption {
+// WithResponseHook registers a hook to observe response metadata.
+func WithResponseHook(h ResponseHook) ClientOption {
 	return func(c *Client) {
-		c.queue = NewRequestQueue(workers, interval)
-		c.queue.Start()
+		c.responseHook = h
 	}
 }
 
@@ -175,3 +167,5 @@ func (c *Client) Close() {
 		c.queue.Stop()
 	}
 }
+
+
