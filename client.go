@@ -140,6 +140,25 @@ func WithGlobalAPIKey(globalAPIKey string) ClientOption {
 	}
 }
 
+// WithRequestQueue enables automatic request queueing with the specified
+// number of workers and interval between requests.
+//
+// Example:
+//
+//	client := NewClient("your-server-key",
+//	    WithRequestQueue(2, time.Second),
+//	)
+func WithRequestQueue(workers int, interval time.Duration) ClientOption {
+	return func(c *Client) {
+		if c.queue != nil {
+			c.queue.Stop()
+		}
+		q := NewRequestQueue(workers, interval)
+		q.Start()
+		c.queue = q
+	}
+}
+
 // Close stops background goroutines and releases resources associated with the client.
 // This includes closing the cache cleanup goroutine if caching is enabled, and stopping
 // the request queue if one was configured.
