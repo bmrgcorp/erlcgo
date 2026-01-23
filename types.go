@@ -20,6 +20,18 @@ type ERLCServerPlayer struct {
 	Team string `json:"Team"`
 }
 
+// ERLCServerInfo represents metadata about the server.
+type ERLCServerInfo struct {
+	Name           string  `json:"Name"`
+	OwnerId        int64   `json:"OwnerId"`
+	CoOwnerIds     []int64 `json:"CoOwnerIds"`
+	CurrentPlayers int     `json:"CurrentPlayers"`
+	MaxPlayers     int     `json:"MaxPlayers"`
+	JoinKey        string  `json:"JoinKey"`
+	AccVerifiedReq string  `json:"AccVerifiedReq"`
+	TeamBalance    bool    `json:"TeamBalance"`
+}
+
 // ERLCCommandLog represents a command executed on the server.
 type ERLCCommandLog struct {
 	// Player who executed the command
