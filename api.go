@@ -27,6 +27,38 @@ func (c *Client) GetPlayers(ctx context.Context) ([]ERLCServerPlayer, error) {
 	return players, err
 }
 
+// GetQueue retrieves the list of player IDs currently in the server join queue.
+//
+// Example:
+//
+//	queue, err := client.GetQueue(ctx)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	for _, robloxID := range queue {
+//	    fmt.Printf("Queued Player ID: %d\n", robloxID)
+//	}
+func (c *Client) GetQueue(ctx context.Context) ([]int64, error) {
+	var queue []int64
+	err := c.get(ctx, "/server/queue", &queue)
+	return queue, err
+}
+
+// GetServerInfo retrieves basic information about the server.
+//
+// Example:
+//
+//	info, err := client.GetServerInfo(ctx)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Server: %s (%d/%d)\n", info.Name, info.CurrentPlayers, info.MaxPlayers)
+func (c *Client) GetServerInfo(ctx context.Context) (*ERLCServerInfo, error) {
+	var info ERLCServerInfo
+	err := c.get(ctx, "/server", &info)
+	return &info, err
+}
+
 // GetCommandLogs retrieves the command execution history.
 // The logs are ordered from newest to oldest.
 //
