@@ -20,6 +20,16 @@ type ERLCServerPlayer struct {
 	Team string `json:"Team"`
 }
 
+// ClientMetrics tracks performance and health data for the client.
+type ClientMetrics struct {
+	TotalRequests    int64
+	TotalErrors      int64
+	TotalRateLimits  int64
+	CacheHits        int64
+	CacheMisses      int64
+	AvgResponseTime  time.Duration
+}
+
 // ERLCServerInfo represents metadata about the server.
 type ERLCServerInfo struct {
 	Name           string  `json:"Name"`
@@ -255,6 +265,9 @@ type EventConfig struct {
 	BatchWindow         time.Duration
 	LogErrors           bool
 	ErrorHandler        func(error)
+	// OnPanic is called if an event handler panics. 
+	// If nil, the panic is recovered but not reported.
+	OnPanic             func(interface{})
 	TimeFormat          string
 }
 
@@ -275,6 +288,7 @@ type Subscription struct {
 	Events   chan Event
 	done     chan struct{}
 	handlers HandlerRegistration
+	config   *EventConfig
 }
 
 
