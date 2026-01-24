@@ -278,6 +278,20 @@ client := erlcgo.NewClient("your-api-key",
 )
 ```
 
+
+## Metrics 
+
+For large-scale bots, you can track internal client health metrics:
+
+```go
+// Get real-time stats
+stats := client.Metrics()
+
+fmt.Printf("Requests: %d | Errors: %d\n", stats.TotalRequests, stats.TotalErrors)
+fmt.Printf("Cache Efficiency: %.2f%%\n", float64(stats.CacheHits)/float64(stats.TotalRequests)*100)
+fmt.Printf("Avg Latency: %s\n", stats.AvgResponseTime)
+```
+
 ## Best Practices
 
 1. **Use Contexts for Control**
