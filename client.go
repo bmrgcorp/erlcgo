@@ -31,8 +31,11 @@ type Client struct {
 	globalAPIKey string
 	rateLimiter  *RateLimiter
 	queue        *RequestQueue
+	ownsQueue    bool
 	cache        *CacheConfig
 	responseHook ResponseHook
+	metrics      *ClientMetrics
+	metricsMu    sync.RWMutex
 }
 
 // ClientOption allows customizing the client's behavior.
@@ -65,6 +68,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		apiKey:      apiKey,
 		rateLimiter: NewRateLimiter(),
 		cache:       defaultCache,
+		metrics:     &ClientMetrics{},
 	}
 
 	// Apply custom options
@@ -140,6 +144,27 @@ func WithGlobalAPIKey(globalAPIKey string) ClientOption {
 	}
 }
 
+// WithRateLimiter allows using an existing RateLimiter.
+// This is essential for large bots using a Global API Key to ensure all clients
+// respect the account-wide rate limits.
+func WithRateLimiter(rl *RateLimiter) ClientOption {
+	return func(c *Client) {
+		c.rateLimiter = rl
+	}
+}
+
+// WithQueue allows using an existing RequestQueue. 
+// This is recommended for large bots to share a single worker pool across all server clients.
+func WithQueue(q *RequestQueue) ClientOption {
+	return func(c *Client) {
+		if c.queue != nil && c.ownsQueue {
+			c.queue.Stop()
+		}
+		c.queue = q
+		c.ownsQueue = false
+	}
+}
+
 // WithRequestQueue enables automatic request queueing with the specified
 // number of workers and interval between requests.
 //
@@ -150,12 +175,13 @@ func WithGlobalAPIKey(globalAPIKey string) ClientOption {
 //	)
 func WithRequestQueue(workers int, interval time.Duration) ClientOption {
 	return func(c *Client) {
-		if c.queue != nil {
+		if c.queue != nil && c.ownsQueue {
 			c.queue.Stop()
 		}
 		q := NewRequestQueue(workers, interval)
 		q.Start()
 		c.queue = q
+		c.ownsQueue = true
 	}
 }
 
@@ -181,10 +207,17 @@ func (c *Client) Close() {
 			mc.Close()
 		}
 	}
-	if c.queue != nil {
-		// Stop the request queue if one was configured
+	if c.queue != nil && c.ownsQueue {
+		// Stop the request queue only if it was created by this client
 		c.queue.Stop()
 	}
+}
+
+// Metrics returns a copy of the current client metrics.
+func (c *Client) Metrics() ClientMetrics {
+	c.metricsMu.RLock()
+	defer c.metricsMu.RUnlock()
+	return *c.metrics
 }
 
 
