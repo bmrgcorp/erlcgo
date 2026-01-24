@@ -40,32 +40,42 @@ func (s *Subscription) Handle(handlers HandlerRegistration) {
 
 func (s *Subscription) processEvents() {
 	for event := range s.Events {
-		switch event.Type {
-		case EventTypePlayers:
-			if s.handlers.PlayerHandler != nil {
-				s.handlers.PlayerHandler(event.Data.([]PlayerEvent))
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					if s.config != nil && s.config.OnPanic != nil {
+						s.config.OnPanic(r)
+					}
+				}
+			}()
+
+			switch event.Type {
+			case EventTypePlayers:
+				if s.handlers.PlayerHandler != nil {
+					s.handlers.PlayerHandler(event.Data.([]PlayerEvent))
+				}
+			case EventTypeCommands:
+				if s.handlers.CommandHandler != nil {
+					s.handlers.CommandHandler(event.Data.([]ERLCCommandLog))
+				}
+			case EventTypeKills:
+				if s.handlers.KillHandler != nil {
+					s.handlers.KillHandler(event.Data.([]ERLCKillLog))
+				}
+			case EventTypeModCalls:
+				if s.handlers.ModCallHandler != nil {
+					s.handlers.ModCallHandler(event.Data.([]ERLCModCallLog))
+				}
+			case EventTypeJoins:
+				if s.handlers.JoinHandler != nil {
+					s.handlers.JoinHandler(event.Data.([]ERLCJoinLog))
+				}
+			case EventTypeVehicles:
+				if s.handlers.VehicleHandler != nil {
+					s.handlers.VehicleHandler(event.Data.([]ERLCVehicle))
+				}
 			}
-		case EventTypeCommands:
-			if s.handlers.CommandHandler != nil {
-				s.handlers.CommandHandler(event.Data.([]ERLCCommandLog))
-			}
-		case EventTypeKills:
-			if s.handlers.KillHandler != nil {
-				s.handlers.KillHandler(event.Data.([]ERLCKillLog))
-			}
-		case EventTypeModCalls:
-			if s.handlers.ModCallHandler != nil {
-				s.handlers.ModCallHandler(event.Data.([]ERLCModCallLog))
-			}
-		case EventTypeJoins:
-			if s.handlers.JoinHandler != nil {
-				s.handlers.JoinHandler(event.Data.([]ERLCJoinLog))
-			}
-		case EventTypeVehicles:
-			if s.handlers.VehicleHandler != nil {
-				s.handlers.VehicleHandler(event.Data.([]ERLCVehicle))
-			}
-		}
+		}()
 	}
 }
 
@@ -78,6 +88,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 	sub := &Subscription{
 		Events: make(chan Event, config.BufferSize),
 		done:   make(chan struct{}),
+		config: config,
 	}
 
 	state := &lastState{
