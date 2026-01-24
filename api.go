@@ -220,6 +220,9 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		if req.Method == http.MethodGet && c.cache.Cache != nil {
 			cacheKey := c.cache.Prefix + req.URL.String()
 			if cached, ok := c.cache.Cache.Get(cacheKey); ok {
+				c.metricsMu.Lock()
+				c.metrics.CacheHits++
+				c.metricsMu.Unlock()
 				if v != nil {
 					data, err := json.Marshal(cached)
 					if err != nil {
@@ -229,6 +232,9 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 				}
 				return nil
 			}
+			c.metricsMu.Lock()
+			c.metrics.CacheMisses++
+			c.metricsMu.Unlock()
 		}
 	}
 
@@ -243,7 +249,20 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 			return fmt.Errorf("http client not initialized")
 		}
 
+		start := time.Now()
 		resp, err := c.httpClient.Do(req)
+		duration := time.Since(start)
+
+		c.metricsMu.Lock()
+		c.metrics.TotalRequests++
+		// Simple moving average for response time
+		if c.metrics.AvgResponseTime == 0 {
+			c.metrics.AvgResponseTime = duration
+		} else {
+			c.metrics.AvgResponseTime = (c.metrics.AvgResponseTime + duration) / 2
+		}
+		c.metricsMu.Unlock()
+
 		if err != nil {
 			return fmt.Errorf("request failed: %w", err)
 		}
@@ -304,6 +323,13 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 			} else {
 				apiErr.Message = fmt.Sprintf("unknown error (status %d)", resp.StatusCode)
 			}
+
+			c.metricsMu.Lock()
+			c.metrics.TotalErrors++
+			if resp.StatusCode == http.StatusTooManyRequests {
+				c.metrics.TotalRateLimits++
+			}
+			c.metricsMu.Unlock()
 
 			if c.responseHook != nil {
 				c.responseHook(ResponseMeta{
