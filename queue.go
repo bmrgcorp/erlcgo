@@ -102,3 +102,8 @@ func (q *RequestQueue) Enqueue(ctx context.Context, execute func() error) error 
 		return <-req.response
 	}
 }
+
+// Depth returns the current number of requests waiting in the queue.
+func (q *RequestQueue) Depth() int {
+	return len(q.queue)
+}
