@@ -18,6 +18,7 @@ package erlcgo
 
 import (
 	"net/http"
+	"sync"
 	"time"
 )
 
