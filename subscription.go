@@ -149,145 +149,151 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 			case <-sub.done:
 				return
 			case <-ticker.C:
+				var wg sync.WaitGroup
 				for _, eventType := range types {
-					switch eventType {
-					case EventTypePlayers:
-						if players, err := c.GetPlayers(ctx); err == nil {
-							newSet := newPlayerSetFromSlice(players)
-							mu.Lock()
-							oldSet := state.players
-							state.players = newSet
-							mu.Unlock()
-
-							changes := make([]PlayerEvent, 0)
-
-							for _, player := range players {
-								if _, exists := oldSet[player.Player]; !exists {
-									changes = append(changes, PlayerEvent{
-										Player: player,
-										Type:   "join",
-									})
-								}
-							}
-
-							for player := range oldSet {
-								if _, exists := newSet[player]; !exists {
-									changes = append(changes, PlayerEvent{
-										Player: ERLCServerPlayer{Player: player},
-										Type:   "leave",
-									})
-								}
-							}
-
-							if len(changes) > 0 {
-								select {
-								case sub.Events <- Event{Type: eventType, Data: changes}:
-								default:
-								}
-							}
-						}
-
-					case EventTypeCommands:
-						if logs, err := c.GetCommandLogs(ctx); err == nil && len(logs) > 0 {
-							mu.RLock()
-							lastTime := state.commandTime
-							mu.RUnlock()
-
-							if logs[0].Timestamp > lastTime {
+					wg.Add(1)
+					go func(et EventType) {
+						defer wg.Done()
+						switch et {
+						case EventTypePlayers:
+							if players, err := c.GetPlayers(ctx); err == nil {
+								newSet := newPlayerSetFromSlice(players)
 								mu.Lock()
-								state.commandTime = logs[0].Timestamp
+								oldSet := state.players
+								state.players = newSet
 								mu.Unlock()
 
-								select {
-								case sub.Events <- Event{Type: eventType, Data: logs}:
-								default:
+								changes := make([]PlayerEvent, 0)
+
+								for _, player := range players {
+									if _, exists := oldSet[player.Player]; !exists {
+										changes = append(changes, PlayerEvent{
+											Player: player,
+											Type:   "join",
+										})
+									}
+								}
+
+								for player := range oldSet {
+									if _, exists := newSet[player]; !exists {
+										changes = append(changes, PlayerEvent{
+											Player: ERLCServerPlayer{Player: player},
+											Type:   "leave",
+										})
+									}
+								}
+
+								if len(changes) > 0 {
+									select {
+									case sub.Events <- Event{Type: et, Data: changes}:
+									default:
+									}
 								}
 							}
-						}
 
-					case EventTypeModCalls:
-						if logs, err := c.GetModCalls(ctx); err == nil && len(logs) > 0 {
-							mu.RLock()
-							lastTime := state.modCallTime
-							mu.RUnlock()
+						case EventTypeCommands:
+							if logs, err := c.GetCommandLogs(ctx); err == nil && len(logs) > 0 {
+								mu.RLock()
+								lastTime := state.commandTime
+								mu.RUnlock()
 
-							if logs[0].Timestamp > lastTime {
+								if logs[0].Timestamp > lastTime {
+									mu.Lock()
+									state.commandTime = logs[0].Timestamp
+									mu.Unlock()
+
+									select {
+									case sub.Events <- Event{Type: et, Data: logs}:
+									default:
+									}
+								}
+							}
+
+						case EventTypeModCalls:
+							if logs, err := c.GetModCalls(ctx); err == nil && len(logs) > 0 {
+								mu.RLock()
+								lastTime := state.modCallTime
+								mu.RUnlock()
+
+								if logs[0].Timestamp > lastTime {
+									mu.Lock()
+									state.modCallTime = logs[0].Timestamp
+									mu.Unlock()
+
+									select {
+									case sub.Events <- Event{Type: et, Data: logs}:
+									default:
+									}
+								}
+							}
+
+						case EventTypeKills:
+							if logs, err := c.GetKillLogs(ctx); err == nil && len(logs) > 0 {
+								mu.RLock()
+								lastTime := state.killTime
+								mu.RUnlock()
+
+								if logs[0].Timestamp > lastTime {
+									mu.Lock()
+									state.killTime = logs[0].Timestamp
+									mu.Unlock()
+
+									select {
+									case sub.Events <- Event{Type: et, Data: logs}:
+									default:
+									}
+								}
+							}
+
+						case EventTypeJoins:
+							if logs, err := c.GetJoinLogs(ctx); err == nil && len(logs) > 0 {
+								mu.RLock()
+								lastTime := state.joinTime
+								mu.RUnlock()
+
+								if logs[0].Timestamp > lastTime {
+									mu.Lock()
+									state.joinTime = logs[0].Timestamp
+									mu.Unlock()
+
+									select {
+									case sub.Events <- Event{Type: et, Data: logs}:
+									default:
+									}
+								}
+							}
+
+						case EventTypeVehicles:
+							if vehicles, err := c.GetVehicles(ctx); err == nil {
+								newSet := make(map[string]struct{})
+								for _, v := range vehicles {
+									newSet[v.Owner+":"+v.Name] = struct{}{}
+								}
+
 								mu.Lock()
-								state.modCallTime = logs[0].Timestamp
+								oldSet := state.vehicleSet
+								state.vehicleSet = newSet
 								mu.Unlock()
 
-								select {
-								case sub.Events <- Event{Type: eventType, Data: logs}:
-								default:
+								newVehicles := make([]ERLCVehicle, 0)
+								for _, vehicle := range vehicles {
+									key := vehicle.Owner + ":" + vehicle.Name
+									if _, exists := oldSet[key]; !exists {
+										newVehicles = append(newVehicles, vehicle)
+									}
+								}
+
+								if len(newVehicles) > 0 {
+									select {
+									case sub.Events <- Event{Type: et, Data: newVehicles}:
+									default:
+									}
 								}
 							}
 						}
-
-					case EventTypeKills:
-						if logs, err := c.GetKillLogs(ctx); err == nil && len(logs) > 0 {
-							mu.RLock()
-							lastTime := state.killTime
-							mu.RUnlock()
-
-							if logs[0].Timestamp > lastTime {
-								mu.Lock()
-								state.killTime = logs[0].Timestamp
-								mu.Unlock()
-
-								select {
-								case sub.Events <- Event{Type: eventType, Data: logs}:
-								default:
-								}
-							}
-						}
-
-					case EventTypeJoins:
-						if logs, err := c.GetJoinLogs(ctx); err == nil && len(logs) > 0 {
-							mu.RLock()
-							lastTime := state.joinTime
-							mu.RUnlock()
-
-							if logs[0].Timestamp > lastTime {
-								mu.Lock()
-								state.joinTime = logs[0].Timestamp
-								mu.Unlock()
-
-								select {
-								case sub.Events <- Event{Type: eventType, Data: logs}:
-								default:
-								}
-							}
-						}
-
-					case EventTypeVehicles:
-						if vehicles, err := c.GetVehicles(ctx); err == nil {
-							newSet := make(map[string]struct{})
-							for _, v := range vehicles {
-								newSet[v.Owner+":"+v.Name] = struct{}{}
-							}
-
-							mu.Lock()
-							oldSet := state.vehicleSet
-							state.vehicleSet = newSet
-							mu.Unlock()
-
-							newVehicles := make([]ERLCVehicle, 0)
-							for _, vehicle := range vehicles {
-								key := vehicle.Owner + ":" + vehicle.Name
-								if _, exists := oldSet[key]; !exists {
-									newVehicles = append(newVehicles, vehicle)
-								}
-							}
-
-							if len(newVehicles) > 0 {
-								select {
-								case sub.Events <- Event{Type: eventType, Data: newVehicles}:
-								default:
-								}
-							}
-						}
-					}
+					}(eventType)
 				}
+				wg.Wait()
 			}
 		}
 	}()

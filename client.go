@@ -37,6 +37,7 @@ type Client struct {
 	responseHook ResponseHook
 	metrics      *ClientMetrics
 	metricsMu    sync.RWMutex
+	requestGroup group
 }
 
 // ClientOption allows customizing the client's behavior.

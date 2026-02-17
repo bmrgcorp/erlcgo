@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -238,7 +239,8 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 	}
 
-	execute := func() error {
+	// execute performs the actual request and returns the valid JSON body bytes
+	execute := func() ([]byte, error) {
 		if c.rateLimiter != nil {
 			if wait, shouldWait := c.rateLimiter.ShouldWait("global"); shouldWait {
 				time.Sleep(wait)
@@ -246,7 +248,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 
 		if c.httpClient == nil {
-			return fmt.Errorf("http client not initialized")
+			return nil, fmt.Errorf("http client not initialized")
 		}
 
 		start := time.Now()
@@ -264,16 +266,16 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		c.metricsMu.Unlock()
 
 		if err != nil {
-			return fmt.Errorf("request failed: %w", err)
+			return nil, fmt.Errorf("request failed: %w", err)
 		}
 		if resp == nil {
-			return fmt.Errorf("received nil response")
+			return nil, fmt.Errorf("received nil response")
 		}
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("failed to read response: %w", err)
+			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 
 		rl := parseRateLimitHeaders(resp.Header)
@@ -344,34 +346,24 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 			}
 
 			if c.cache != nil && c.cache.StaleIfError && c.cache.Cache != nil {
-				// Try to return stale data on error
-				if cached, ok := c.cache.Cache.Get(c.cache.Prefix + req.URL.String()); ok {
-					if v != nil {
-						data, _ := json.Marshal(cached)
-						return json.Unmarshal(data, v)
-					}
-					return nil
-				}
+				// We can't return stale data here easily as this function handles the raw request.
+				// Stale data fallback logic is checked by the caller if this returns error?
+				// Actually cache logic logic is inside here.
+				// But we are returning error.
+				// In original code, it returned apiErr.
+				// Handling stale data fallback was done by checking cache again.
+				// Here we just return the error.
 			}
-			return apiErr
+			return nil, apiErr
 		}
 
-		if resp.StatusCode == http.StatusOK && v != nil {
+		if resp.StatusCode == http.StatusOK {
+			// Populate cache
 			var rawData interface{}
-			if err := json.Unmarshal(body, &rawData); err != nil {
-				return fmt.Errorf("failed to decode response: %w", err)
-			}
-
-			if c.cache != nil && c.cache.Enabled && c.cache.Cache != nil && req.Method == http.MethodGet {
-				c.cache.Cache.Set(c.cache.Prefix+req.URL.String(), rawData, c.cache.TTL)
-			}
-
-			data, err := json.Marshal(rawData)
-			if err != nil {
-				return fmt.Errorf("failed to marshal data: %w", err)
-			}
-			if err := json.Unmarshal(data, v); err != nil {
-				return fmt.Errorf("failed to unmarshal data: %w", err)
+			if err := json.Unmarshal(body, &rawData); err == nil {
+				if c.cache != nil && c.cache.Enabled && c.cache.Cache != nil && req.Method == http.MethodGet {
+					c.cache.Cache.Set(c.cache.Prefix+req.URL.String(), rawData, c.cache.TTL)
+				}
 			}
 		}
 
@@ -387,13 +379,98 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 			})
 		}
 
-		return nil
+		return body, nil
 	}
 
-	if c.queue != nil {
-		return c.queue.Enqueue(req.Context(), execute)
+	var body []byte
+	var err error
+
+	runWithQueue := func() ([]byte, error) {
+		if c.queue != nil {
+			var b []byte
+			var e error
+			qErr := c.queue.Enqueue(req.Context(), func() error {
+				b, e = execute()
+				return e
+			})
+			if qErr != nil {
+				return nil, qErr
+			}
+			return b, e
+		}
+		return execute()
 	}
-	return execute()
+
+	// Request Coalescing for GET requests
+	if req.Method == http.MethodGet {
+		key := req.URL.String()
+		res, doErr := c.requestGroup.Do(key, func() (interface{}, error) {
+			return runWithQueue()
+		})
+		if doErr != nil {
+			err = doErr
+		} else if res != nil {
+			body = res.([]byte)
+		}
+	} else {
+		body, err = runWithQueue()
+	}
+
+	if err != nil {
+		// Try stale cache if enabled
+		if c.cache != nil && c.cache.StaleIfError && c.cache.Cache != nil {
+			if cached, ok := c.cache.Cache.Get(c.cache.Prefix + req.URL.String()); ok {
+				if v != nil {
+					data, _ := json.Marshal(cached)
+					return json.Unmarshal(data, v)
+				}
+				return nil
+			}
+		}
+		return err
+	}
+
+	if v != nil && body != nil {
+		return json.Unmarshal(body, v)
+	}
+
+	return nil
+}
+
+type call struct {
+	wg  sync.WaitGroup
+	val interface{}
+	err error
+}
+
+type group struct {
+	mu sync.Mutex
+	m  map[string]*call
+}
+
+func (g *group) Do(key string, fn func() (interface{}, error)) (interface{}, error) {
+	g.mu.Lock()
+	if g.m == nil {
+		g.m = make(map[string]*call)
+	}
+	if c, ok := g.m[key]; ok {
+		g.mu.Unlock()
+		c.wg.Wait()
+		return c.val, c.err
+	}
+	c := new(call)
+	c.wg.Add(1)
+	g.m[key] = c
+	g.mu.Unlock()
+
+	c.val, c.err = fn()
+	c.wg.Done()
+
+	g.mu.Lock()
+	delete(g.m, key)
+	g.mu.Unlock()
+
+	return c.val, c.err
 }
 
 
