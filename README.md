@@ -66,12 +66,19 @@ func main() {
     ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
     defer cancel()
 
-    // Get current players
-    players, err := client.GetPlayers(ctx)
+    // Fetch server data with specific parameters
+    opts := erlcgo.ServerQueryOptions{
+        Players:  true,
+        Vehicles: true,
+    }
+    
+    serverData, err := client.GetServer(ctx, opts)
     if err != nil {
         fmt.Printf("Error: %v\n", erlcgo.GetFriendlyErrorMessage(err))
         return
     }
+    
+    fmt.Printf("Server Name: %s, Current Players: %d\n", serverData.Name, len(serverData.Players))
 
     // Real-time event subscription
     sub, err := client.SubscribeWithConfig(ctx, &erlcgo.EventConfig{
@@ -152,20 +159,26 @@ client := erlcgo.NewClient("your-server-key",
 ## API Methods
 
 ```go
-// Player Management
-players, err := client.GetPlayers(ctx)
+// Fetch multiple data arrays at once
+opts := erlcgo.ServerQueryOptions{
+    Players:     true,
+    CommandLogs: true,
+    JoinLogs:    true,
+    Vehicles:    true,
+    Staff:       true,
+    KillLogs:    true,
+    ModCalls:    true,
+    Queue:       true,
+}
+serverData, err := client.GetServer(ctx, opts)
 
-// Server Commands
+// Access the results
+players := serverData.Players
+cmds := serverData.CommandLogs
+staff := serverData.Staff
+
+// Execute Commands
 err = client.ExecuteCommand(ctx, ":pm NoahCxrest Hello!")
-
-// Logs
-commandLogs, err := client.GetCommandLogs(ctx)
-modCalls, err := client.GetModCalls(ctx)
-killLogs, err := client.GetKillLogs(ctx)
-joinLogs, err := client.GetJoinLogs(ctx)
-
-// Vehicle Management
-vehicles, err := client.GetVehicles(ctx)
 ```
 
 ## Real-time Events

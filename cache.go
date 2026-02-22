@@ -96,15 +96,13 @@ func (c *MemoryCache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 
-	// Check if item has expired. If so, upgrade to write lock to delete it.
-	// This provides immediate expiration checking even between cleanup runs.
+	// If the item has expired, upgrade to a write lock and delete it.
 	expired := time.Now().After(item.expiration)
 	if expired {
 		// Upgrade to write lock to delete the expired item
 		c.mu.RUnlock()
 		c.mu.Lock()
-		// Double-check expiration after acquiring write lock (item may have been
-		// deleted or updated by another goroutine)
+		// Double-check expiration after acquiring write lock
 		if item, exists := c.items[key]; exists && time.Now().After(item.expiration) {
 			delete(c.items, key)
 			if c.onEvict != nil {
@@ -199,9 +197,7 @@ func (c *MemoryCache) WithEvictionCallback(fn func(key string, value interface{}
 //	cache.Close() // Clean up when done
 func (c *MemoryCache) Close() {
 	c.stopOnce.Do(func() {
-		// Close the channel to signal the cleanup goroutine to stop.
-		// Using sync.Once ensures we only close once, preventing panic from
-		// closing an already-closed channel.
+		// Close the channel safely
 		close(c.stopCh)
 	})
 }

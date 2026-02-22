@@ -9,8 +9,9 @@
 //	    erlcgo.WithGlobalAPIKey("your-global-key"),
 //	)
 //
-//	// Get players
-//	players, err := client.GetPlayers(context.Background())
+//	// Fetch server data
+//	opts := erlcgo.ServerQueryOptions{Players: true, Vehicles: true}
+//	resp, err := client.GetServer(context.Background(), opts)
 //
 //	// Execute command
 //	err = client.ExecuteCommand(context.Background(), ":pm NoahCxrest Hello, World!")
@@ -66,7 +67,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Second * 10,
 		},
-		baseURL:     "https://api.policeroleplay.community/v1",
+		baseURL:     "https://api.policeroleplay.community",
 		apiKey:      apiKey,
 		rateLimiter: NewRateLimiter(),
 		cache:       defaultCache,

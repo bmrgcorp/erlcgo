@@ -11,147 +11,60 @@ import (
 	"time"
 )
 
-// GetPlayers retrieves a list of players currently on the server.
+// GetServer retrieves server data depending on the provided query options.
+// This is the primary endpoint for the v2 API.
 //
 // Example:
 //
-//	players, err := client.GetPlayers(ctx)
+//	opts := erlcgo.ServerQueryOptions{Players: true, Vehicles: true}
+//	resp, err := client.GetServer(ctx, opts)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	for _, player := range players {
-//	    fmt.Printf("Player: %s, Team: %s\n", player.Player, player.Team)
-//	}
-func (c *Client) GetPlayers(ctx context.Context) ([]ERLCServerPlayer, error) {
-	var players []ERLCServerPlayer
-	err := c.get(ctx, "/server/players", &players)
-	return players, err
-}
+//	fmt.Printf("Server Name: %s\n", resp.Name)
+func (c *Client) GetServer(ctx context.Context, opts ...ServerQueryOptions) (*ERLCServerResponse, error) {
+	query := ""
+	if len(opts) > 0 {
+		opt := opts[0]
+		params := []string{}
+		if opt.Players {
+			params = append(params, "Players=true")
+		}
+		if opt.Staff {
+			params = append(params, "Staff=true")
+		}
+		if opt.JoinLogs {
+			params = append(params, "JoinLogs=true")
+		}
+		if opt.Queue {
+			params = append(params, "Queue=true")
+		}
+		if opt.KillLogs {
+			params = append(params, "KillLogs=true")
+		}
+		if opt.CommandLogs {
+			params = append(params, "CommandLogs=true")
+		}
+		if opt.ModCalls {
+			params = append(params, "ModCalls=true")
+		}
+		if opt.Vehicles {
+			params = append(params, "Vehicles=true")
+		}
+		if len(params) > 0 {
+			query = "?"
+			for i, p := range params {
+				if i > 0 {
+					query += "&"
+				}
+				query += p
+			}
+		}
+	}
 
-// GetQueue retrieves the list of player IDs currently in the server join queue.
-//
-// Example:
-//
-//	queue, err := client.GetQueue(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	for _, robloxID := range queue {
-//	    fmt.Printf("Queued Player ID: %d\n", robloxID)
-//	}
-func (c *Client) GetQueue(ctx context.Context) ([]int64, error) {
-	var queue []int64
-	err := c.get(ctx, "/server/queue", &queue)
-	return queue, err
-}
-
-// GetServerInfo retrieves basic information about the server.
-//
-// Example:
-//
-//	info, err := client.GetServerInfo(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	fmt.Printf("Server: %s (%d/%d)\n", info.Name, info.CurrentPlayers, info.MaxPlayers)
-func (c *Client) GetServerInfo(ctx context.Context) (*ERLCServerInfo, error) {
-	var info ERLCServerInfo
-	err := c.get(ctx, "/server", &info)
-	return &info, err
-}
-
-// GetCommandLogs retrieves the command execution history.
-// The logs are ordered from newest to oldest.
-//
-// Example:
-//
-//	logs, err := client.GetCommandLogs(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	for _, log := range logs {
-//	    fmt.Printf("%s executed: %s\n", log.Player, log.Command)
-//	}
-func (c *Client) GetCommandLogs(ctx context.Context) ([]ERLCCommandLog, error) {
-	var logs []ERLCCommandLog
-	err := c.get(ctx, "/server/commandlogs", &logs)
-	return logs, err
-}
-
-// GetModCalls retrieves the moderation call history.
-// Returns a list of moderation calls ordered from newest to oldest.
-//
-// Example:
-//
-//	calls, err := client.GetModCalls(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	for _, call := range calls {
-//	    fmt.Printf("Call by %s handled by %s\n", call.Caller, call.Moderator)
-//	}
-func (c *Client) GetModCalls(ctx context.Context) ([]ERLCModCallLog, error) {
-	var logs []ERLCModCallLog
-	err := c.get(ctx, "/server/modcalls", &logs)
-	return logs, err
-}
-
-// GetKillLogs retrieves the kill log history.
-// Returns a list of kills ordered from newest to oldest.
-//
-// Example:
-//
-//	kills, err := client.GetKillLogs(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	for _, kill := range kills {
-//	    fmt.Printf("%s was killed by %s\n", kill.Killed, kill.Killer)
-//	}
-func (c *Client) GetKillLogs(ctx context.Context) ([]ERLCKillLog, error) {
-	var logs []ERLCKillLog
-	err := c.get(ctx, "/server/killlogs", &logs)
-	return logs, err
-}
-
-// GetJoinLogs retrieves the server join/leave history.
-// Returns a list of join/leave events ordered from newest to oldest.
-//
-// Example:
-//
-//	joins, err := client.GetJoinLogs(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	for _, join := range joins {
-//	    action := "joined"
-//	    if !join.Join {
-//	        action = "left"
-//	    }
-//	    fmt.Printf("%s %s the server\n", join.Player, action)
-//	}
-func (c *Client) GetJoinLogs(ctx context.Context) ([]ERLCJoinLog, error) {
-	var logs []ERLCJoinLog
-	err := c.get(ctx, "/server/joinlogs", &logs)
-	return logs, err
-}
-
-// GetVehicles retrieves a list of all vehicles on the server.
-// Returns information about each vehicle including its owner and texture.
-//
-// Example:
-//
-//	vehicles, err := client.GetVehicles(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	for _, vehicle := range vehicles {
-//	    fmt.Printf("%s owns a %s\n", vehicle.Owner, vehicle.Name)
-//	}
-func (c *Client) GetVehicles(ctx context.Context) ([]ERLCVehicle, error) {
-	var vehicles []ERLCVehicle
-	err := c.get(ctx, "/server/vehicles", &vehicles)
-	return vehicles, err
+	var resp ERLCServerResponse
+	err := c.get(ctx, "/v2/server"+query, &resp)
+	return &resp, err
 }
 
 // ExecuteCommand executes a server command.
@@ -172,7 +85,7 @@ func (c *Client) ExecuteCommand(ctx context.Context, command string) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/server/command", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/server/command", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
@@ -181,8 +94,7 @@ func (c *Client) ExecuteCommand(ctx context.Context, command string) error {
 	return c.doRequest(req, nil)
 }
 
-// get is an internal helper method for making GET requests.
-// It handles the creation of the request and response parsing.
+// get is an internal helper that executes GET requests and parses responses.
 func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
@@ -191,8 +103,7 @@ func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 	return c.doRequest(req, v)
 }
 
-// doRequest is an internal helper method that executes HTTP requests.
-// It handles authorization, rate limiting, and error parsing.
+// doRequest executes HTTP requests, handling authorization, rate limiting, and errors.
 func (c *Client) doRequest(req *http.Request, v interface{}) error {
 	if req == nil {
 		return fmt.Errorf("request cannot be nil")
@@ -239,7 +150,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 	}
 
-	// execute performs the actual request and returns the valid JSON body bytes
+	// execute performs the HTTP request and returns the raw JSON body bytes
 	execute := func() ([]byte, error) {
 		if c.rateLimiter != nil {
 			if wait, shouldWait := c.rateLimiter.ShouldWait("global"); shouldWait {
@@ -346,13 +257,7 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 			}
 
 			if c.cache != nil && c.cache.StaleIfError && c.cache.Cache != nil {
-				// We can't return stale data here easily as this function handles the raw request.
-				// Stale data fallback logic is checked by the caller if this returns error?
-				// Actually cache logic logic is inside here.
-				// But we are returning error.
-				// In original code, it returned apiErr.
-				// Handling stale data fallback was done by checking cache again.
-				// Here we just return the error.
+				// Stale data fallback is handled locally by the caller upon receiving this error
 			}
 			return nil, apiErr
 		}

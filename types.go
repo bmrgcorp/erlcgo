@@ -7,17 +7,23 @@ import (
 	"time"
 )
 
-// ERLCServerPlayer represents a player currently on the server.
-// It contains information about their permissions, team, and callsign.
+// ERLCLocation represents a player's physical in-game location.
+type ERLCLocation struct {
+	LocationX      float64 `json:"LocationX"`
+	LocationZ      float64 `json:"LocationZ"`
+	PostalCode     string  `json:"PostalCode"`
+	StreetName     string  `json:"StreetName"`
+	BuildingNumber string  `json:"BuildingNumber"`
+}
+
+// ERLCServerPlayer represents a player currently in the server.
 type ERLCServerPlayer struct {
-	// Player is the username of the player
-	Player string `json:"Player"`
-	// Permission represents the player's permission level (e.g., "Admin", "Moderator", "Player")
-	Permission string `json:"Permission"`
-	// Callsign is the player's in-game identifier (e.g., "PC-31")
-	Callsign string `json:"Callsign"`
-	// Team represents the player's current team or department
-	Team string `json:"Team"`
+	Player      string       `json:"Player"`
+	Permission  string       `json:"Permission"`
+	Callsign    string       `json:"Callsign"`
+	Team        string       `json:"Team"`
+	Location    ERLCLocation `json:"Location"`
+	WantedStars int          `json:"WantedStars"`
 }
 
 // ClientMetrics tracks performance and health data for the client.
@@ -28,6 +34,45 @@ type ClientMetrics struct {
 	CacheHits        int64
 	CacheMisses      int64
 	AvgResponseTime  time.Duration
+}
+
+// ERLCStaff contains mapping lists for the current staff in the server.
+type ERLCStaff struct {
+	Admins  map[string]string `json:"Admins"`
+	Mods    map[string]string `json:"Mods"`
+	Helpers map[string]string `json:"Helpers"`
+}
+
+// ERLCServerResponse represents the full payload returned from the /v2/server endpoint.
+type ERLCServerResponse struct {
+	Name           string             `json:"Name"`
+	OwnerId        int64              `json:"OwnerId"`
+	CoOwnerIds     []int64            `json:"CoOwnerIds"`
+	CurrentPlayers int                `json:"CurrentPlayers"`
+	MaxPlayers     int                `json:"MaxPlayers"`
+	JoinKey        string             `json:"JoinKey"`
+	AccVerifiedReq string             `json:"AccVerifiedReq"`
+	TeamBalance    bool               `json:"TeamBalance"`
+	Players        []ERLCServerPlayer `json:"Players,omitempty"`
+	Staff          *ERLCStaff         `json:"Staff,omitempty"`
+	JoinLogs       []ERLCJoinLog      `json:"JoinLogs,omitempty"`
+	Queue          []int64            `json:"Queue,omitempty"`
+	KillLogs       []ERLCKillLog      `json:"KillLogs,omitempty"`
+	CommandLogs    []ERLCCommandLog   `json:"CommandLogs,omitempty"`
+	ModCalls       []ERLCModCallLog   `json:"ModCalls,omitempty"`
+	Vehicles       []ERLCVehicle      `json:"Vehicles,omitempty"`
+}
+
+// ServerQueryOptions specifies which optional data sets to fetch via the /v2/server endpoint.
+type ServerQueryOptions struct {
+	Players     bool `url:"Players,omitempty"`
+	Staff       bool `url:"Staff,omitempty"`
+	JoinLogs    bool `url:"JoinLogs,omitempty"`
+	Queue       bool `url:"Queue,omitempty"`
+	KillLogs    bool `url:"KillLogs,omitempty"`
+	CommandLogs bool `url:"CommandLogs,omitempty"`
+	ModCalls    bool `url:"ModCalls,omitempty"`
+	Vehicles    bool `url:"Vehicles,omitempty"`
 }
 
 // ERLCServerInfo represents metadata about the server.
@@ -42,74 +87,51 @@ type ERLCServerInfo struct {
 	TeamBalance    bool    `json:"TeamBalance"`
 }
 
-// ERLCCommandLog represents a command executed on the server.
+// ERLCCommandLog represents a command executed in the server.
 type ERLCCommandLog struct {
-	// Player who executed the command
-	Player string `json:"Player"`
-	// Timestamp of when the command was executed (Unix timestamp)
-	Timestamp int64 `json:"Timestamp"`
-	// Command that was executed
-	Command string `json:"Command"`
+	Player    string `json:"Player"`
+	Timestamp int64  `json:"Timestamp"`
+	Command   string `json:"Command"`
 }
 
 // ERLCModCallLog represents a moderation call log entry.
 type ERLCModCallLog struct {
-	// Caller is the player who initiated the call
-	Caller string `json:"Caller"`
-	// Moderator is the moderator who responded to the call
+	Caller    string `json:"Caller"`
 	Moderator string `json:"Moderator"`
-	// Timestamp of when the call was made (Unix timestamp)
-	Timestamp int64 `json:"Timestamp"`
+	Timestamp int64  `json:"Timestamp"`
 }
 
 // ERLCKillLog represents a kill log entry.
 type ERLCKillLog struct {
-	// Killed is the player who was killed
-	Killed string `json:"Killed"`
-	// Timestamp of when the kill occurred (Unix timestamp)
-	Timestamp int64 `json:"Timestamp"`
-	// Killer is the player who made the kill
-	Killer string `json:"Killer"`
+	Killed    string `json:"Killed"`
+	Timestamp int64  `json:"Timestamp"`
+	Killer    string `json:"Killer"`
 }
 
-// ERLCJoinLog represents a join log entry.
+// ERLCJoinLog represents a join or leave log entry.
 type ERLCJoinLog struct {
-	// Join indicates whether the player joined (true) or left (false) the server
-	Join bool `json:"Join"`
-	// Timestamp of when the join/leave occurred (Unix timestamp)
-	Timestamp int64 `json:"Timestamp"`
-	// Player is the player who joined or left the server
-	Player string `json:"Player"`
+	Join      bool   `json:"Join"`
+	Timestamp int64  `json:"Timestamp"`
+	Player    string `json:"Player"`
 }
 
-// ERLCVehicle represents a vehicle in the game.
+// ERLCVehicle represents a vehicle in the server.
 type ERLCVehicle struct {
-	// Texture is the texture applied to the vehicle
 	Texture string `json:"Texture"`
-	// Name is the name of the vehicle
-	Name string `json:"Name"`
-	// Owner is the player who owns the vehicle
-	Owner string `json:"Owner"`
+	Name    string `json:"Name"`
+	Owner   string `json:"Owner"`
 }
 
 // APIError represents an error returned by the ERLC API.
-// It implements the error interface and provides detailed error information.
+// It implements the standard Go error interface.
 type APIError struct {
-	// Code is the numeric error code
-	Code int `json:"code"`
-	// Message is the human-readable error description
-	Message string `json:"message"`
-	// CommandID is the ID of the command that caused the error (if applicable)
-	CommandID string `json:"commandId,omitempty"`
-	// StatusCode is the HTTP status code returned by the API
-	StatusCode int `json:"-"`
-	// Body is the raw response body
-	Body []byte `json:"-"`
-	// Headers are the response headers
-	Headers http.Header `json:"-"`
-	// RateLimit contains parsed rate limit headers
-	RateLimit *RateLimitInfo `json:"-"`
-	// RetryAfter is the parsed retry_after value for 429 responses
+	Code       int            `json:"code"`
+	Message    string         `json:"message"`
+	CommandID  string         `json:"commandId,omitempty"`
+	StatusCode int            `json:"-"`
+	Body       []byte         `json:"-"`
+	Headers    http.Header    `json:"-"`
+	RateLimit  *RateLimitInfo `json:"-"`
 	RetryAfter *time.Duration `json:"-"`
 }
 
