@@ -28,12 +28,12 @@ type ERLCServerPlayer struct {
 
 // ClientMetrics tracks performance and health data for the client.
 type ClientMetrics struct {
-	TotalRequests    int64
-	TotalErrors      int64
-	TotalRateLimits  int64
-	CacheHits        int64
-	CacheMisses      int64
-	AvgResponseTime  time.Duration
+	TotalRequests   int64
+	TotalErrors     int64
+	TotalRateLimits int64
+	CacheHits       int64
+	CacheMisses     int64
+	AvgResponseTime time.Duration
 }
 
 // ERLCStaff contains mapping lists for the current staff in the server.
@@ -45,34 +45,36 @@ type ERLCStaff struct {
 
 // ERLCServerResponse represents the full payload returned from the /v2/server endpoint.
 type ERLCServerResponse struct {
-	Name           string             `json:"Name"`
-	OwnerId        int64              `json:"OwnerId"`
-	CoOwnerIds     []int64            `json:"CoOwnerIds"`
-	CurrentPlayers int                `json:"CurrentPlayers"`
-	MaxPlayers     int                `json:"MaxPlayers"`
-	JoinKey        string             `json:"JoinKey"`
-	AccVerifiedReq string             `json:"AccVerifiedReq"`
-	TeamBalance    bool               `json:"TeamBalance"`
-	Players        []ERLCServerPlayer `json:"Players,omitempty"`
-	Staff          *ERLCStaff         `json:"Staff,omitempty"`
-	JoinLogs       []ERLCJoinLog      `json:"JoinLogs,omitempty"`
-	Queue          []int64            `json:"Queue,omitempty"`
-	KillLogs       []ERLCKillLog      `json:"KillLogs,omitempty"`
-	CommandLogs    []ERLCCommandLog   `json:"CommandLogs,omitempty"`
-	ModCalls       []ERLCModCallLog   `json:"ModCalls,omitempty"`
-	Vehicles       []ERLCVehicle      `json:"Vehicles,omitempty"`
+	Name           string              `json:"Name"`
+	OwnerId        int64               `json:"OwnerId"`
+	CoOwnerIds     []int64             `json:"CoOwnerIds"`
+	CurrentPlayers int                 `json:"CurrentPlayers"`
+	MaxPlayers     int                 `json:"MaxPlayers"`
+	JoinKey        string              `json:"JoinKey"`
+	AccVerifiedReq string              `json:"AccVerifiedReq"`
+	TeamBalance    bool                `json:"TeamBalance"`
+	Players        []ERLCServerPlayer  `json:"Players,omitempty"`
+	Staff          *ERLCStaff          `json:"Staff,omitempty"`
+	JoinLogs       []ERLCJoinLog       `json:"JoinLogs,omitempty"`
+	Queue          []int64             `json:"Queue,omitempty"`
+	KillLogs       []ERLCKillLog       `json:"KillLogs,omitempty"`
+	CommandLogs    []ERLCCommandLog    `json:"CommandLogs,omitempty"`
+	ModCalls       []ERLCModCallLog    `json:"ModCalls,omitempty"`
+	EmergencyCalls []ERLCEmergencyCall `json:"EmergencyCalls,omitempty"`
+	Vehicles       []ERLCVehicle       `json:"Vehicles,omitempty"`
 }
 
 // ServerQueryOptions specifies which optional data sets to fetch via the /v2/server endpoint.
 type ServerQueryOptions struct {
-	Players     bool `url:"Players,omitempty"`
-	Staff       bool `url:"Staff,omitempty"`
-	JoinLogs    bool `url:"JoinLogs,omitempty"`
-	Queue       bool `url:"Queue,omitempty"`
-	KillLogs    bool `url:"KillLogs,omitempty"`
-	CommandLogs bool `url:"CommandLogs,omitempty"`
-	ModCalls    bool `url:"ModCalls,omitempty"`
-	Vehicles    bool `url:"Vehicles,omitempty"`
+	Players        bool `url:"Players,omitempty"`
+	Staff          bool `url:"Staff,omitempty"`
+	JoinLogs       bool `url:"JoinLogs,omitempty"`
+	Queue          bool `url:"Queue,omitempty"`
+	KillLogs       bool `url:"KillLogs,omitempty"`
+	CommandLogs    bool `url:"CommandLogs,omitempty"`
+	ModCalls       bool `url:"ModCalls,omitempty"`
+	EmergencyCalls bool `url:"EmergencyCalls,omitempty"`
+	Vehicles       bool `url:"Vehicles,omitempty"`
 }
 
 // ERLCServerInfo represents metadata about the server.
@@ -115,11 +117,26 @@ type ERLCJoinLog struct {
 	Player    string `json:"Player"`
 }
 
-// ERLCVehicle represents a vehicle in the server.
+// ERLCEmergencyCall represents an emergency call log entry
+type ERLCEmergencyCall struct {
+	Team               string    `json:"Team"`
+	Caller             int64     `json:"Caller"`
+	Players            []int64   `json:"Players"`
+	Position           []float64 `json:"Position"`
+	StartedAt          int64     `json:"StartedAt"`
+	CallNumber         int       `json:"CallNumber"`
+	Description        string    `json:"Description"`
+	PositionDescriptor string    `json:"PositionDescriptor"`
+}
+
+// ERLCVehicle represents a vehicle in the server 
 type ERLCVehicle struct {
-	Texture string `json:"Texture"`
-	Name    string `json:"Name"`
-	Owner   string `json:"Owner"`
+	Name      string `json:"Name"`
+	Owner     string `json:"Owner"`
+	Plate     string `json:"Plate"`
+	Texture   string `json:"Texture"`
+	ColorHex  string `json:"ColorHex"`
+	ColorName string `json:"ColorName"`
 }
 
 // APIError represents an error returned by the ERLC API.
@@ -240,12 +257,13 @@ func DefaultCacheConfig() *CacheConfig {
 type EventType string
 
 const (
-	EventTypePlayers  EventType = "players"
-	EventTypeCommands EventType = "commands"
-	EventTypeModCalls EventType = "modcalls"
-	EventTypeKills    EventType = "kills"
-	EventTypeJoins    EventType = "joins"
-	EventTypeVehicles EventType = "vehicles"
+	EventTypePlayers        EventType = "players"
+	EventTypeCommands       EventType = "commands"
+	EventTypeModCalls       EventType = "modcalls"
+	EventTypeKills          EventType = "kills"
+	EventTypeJoins          EventType = "joins"
+	EventTypeVehicles       EventType = "vehicles"
+	EventTypeEmergencyCalls EventType = "emergencycalls"
 )
 
 type Event struct {
@@ -260,14 +278,16 @@ type KillEventHandler func([]ERLCKillLog)
 type ModCallEventHandler func([]ERLCModCallLog)
 type JoinEventHandler func([]ERLCJoinLog)
 type VehicleEventHandler func([]ERLCVehicle)
+type EmergencyCallEventHandler func([]ERLCEmergencyCall)
 
 type HandlerRegistration struct {
-	PlayerHandler  PlayerEventHandler
-	CommandHandler CommandEventHandler
-	KillHandler    KillEventHandler
-	ModCallHandler ModCallEventHandler
-	JoinHandler    JoinEventHandler
-	VehicleHandler VehicleEventHandler
+	PlayerHandler        PlayerEventHandler
+	CommandHandler       CommandEventHandler
+	KillHandler          KillEventHandler
+	ModCallHandler       ModCallEventHandler
+	JoinHandler          JoinEventHandler
+	VehicleHandler       VehicleEventHandler
+	EmergencyCallHandler EmergencyCallEventHandler
 }
 
 type PlayerEvent struct {
@@ -287,23 +307,24 @@ type EventConfig struct {
 	BatchWindow         time.Duration
 	LogErrors           bool
 	ErrorHandler        func(error)
-	// OnPanic is called if an event handler panics. 
+	// OnPanic is called if an event handler panics.
 	// If nil, the panic is recovered but not reported.
-	OnPanic             func(interface{})
-	TimeFormat          string
+	OnPanic    func(interface{})
+	TimeFormat string
 }
 
 // Internal types for subscription handling
 type playerSet map[string]struct{}
 
 type lastState struct {
-	players     playerSet
-	commandTime int64
-	modCallTime int64
-	killTime    int64
-	joinTime    int64
-	vehicleSet  map[string]struct{}
-	initialized bool
+	players              playerSet
+	commandTime          int64
+	modCallTime          int64
+	killTime             int64
+	joinTime             int64
+	vehicleSet           map[string]struct{}
+	emergencyCallNumbers map[int]struct{}
+	initialized          bool
 }
 
 type Subscription struct {
@@ -312,7 +333,3 @@ type Subscription struct {
 	handlers HandlerRegistration
 	config   *EventConfig
 }
-
-
-
-

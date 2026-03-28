@@ -74,6 +74,10 @@ func (s *Subscription) processEvents() {
 				if s.handlers.VehicleHandler != nil {
 					s.handlers.VehicleHandler(event.Data.([]ERLCVehicle))
 				}
+			case EventTypeEmergencyCalls:
+				if s.handlers.EmergencyCallHandler != nil {
+					s.handlers.EmergencyCallHandler(event.Data.([]ERLCEmergencyCall))
+				}
 			}
 		}()
 	}
@@ -92,13 +96,14 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 	}
 
 	state := &lastState{
-		players:     make(playerSet),
-		vehicleSet:  make(map[string]struct{}),
-		commandTime: 0,
-		modCallTime: 0,
-		killTime:    0,
-		joinTime:    0,
-		initialized: false,
+		players:              make(playerSet),
+		vehicleSet:           make(map[string]struct{}),
+		emergencyCallNumbers: make(map[int]struct{}),
+		commandTime:          0,
+		modCallTime:          0,
+		killTime:             0,
+		joinTime:             0,
+		initialized:          false,
 	}
 
 	opts := ServerQueryOptions{}
@@ -116,6 +121,8 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 			opts.KillLogs = true
 		case EventTypeJoins:
 			opts.JoinLogs = true
+		case EventTypeEmergencyCalls:
+			opts.EmergencyCalls = true
 		}
 	}
 
@@ -139,6 +146,11 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 		}
 		if opts.JoinLogs && len(resp.JoinLogs) > 0 {
 			state.joinTime = resp.JoinLogs[0].Timestamp
+		}
+		if opts.EmergencyCalls {
+			for _, ec := range resp.EmergencyCalls {
+				state.emergencyCallNumbers[ec.CallNumber] = struct{}{}
+			}
 		}
 	}
 
@@ -283,6 +295,29 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 						if len(newVehicles) > 0 {
 							select {
 							case sub.Events <- Event{Type: EventTypeVehicles, Data: newVehicles}:
+							default:
+							}
+						}
+					}
+
+					if opts.EmergencyCalls && len(resp.EmergencyCalls) > 0 {
+						mu.Lock()
+						oldCallNumbers := state.emergencyCallNumbers
+						newCallNumbers := make(map[int]struct{})
+						newCalls := make([]ERLCEmergencyCall, 0)
+
+						for _, ec := range resp.EmergencyCalls {
+							newCallNumbers[ec.CallNumber] = struct{}{}
+							if _, exists := oldCallNumbers[ec.CallNumber]; !exists {
+								newCalls = append(newCalls, ec)
+							}
+						}
+						state.emergencyCallNumbers = newCallNumbers
+						mu.Unlock()
+
+						if len(newCalls) > 0 {
+							select {
+							case sub.Events <- Event{Type: EventTypeEmergencyCalls, Data: newCalls}:
 							default:
 							}
 						}

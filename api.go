@@ -12,7 +12,7 @@ import (
 )
 
 // GetServer retrieves server data depending on the provided query options.
-// This is the primary endpoint for the v2 API.
+// This uses the v2 API endpoint which consolidates all data into a single request.
 //
 // Example:
 //
@@ -48,6 +48,9 @@ func (c *Client) GetServer(ctx context.Context, opts ...ServerQueryOptions) (*ER
 		if opt.ModCalls {
 			params = append(params, "ModCalls=true")
 		}
+		if opt.EmergencyCalls {
+			params = append(params, "EmergencyCalls=true")
+		}
 		if opt.Vehicles {
 			params = append(params, "Vehicles=true")
 		}
@@ -67,12 +70,12 @@ func (c *Client) GetServer(ctx context.Context, opts ...ServerQueryOptions) (*ER
 	return &resp, err
 }
 
-// ExecuteCommand executes a server command.
-// The command should include the leading slash (e.g., "/announce").
+// ExecuteCommand executes a server command via the v2 API.
+// The command should include the leading colon (e.g., ":h Hello").
 //
 // Example:
 //
-//	err := client.ExecuteCommand(ctx, "/announce Server maintenance in 5 minutes")
+//	err := client.ExecuteCommand(ctx, ":h Server maintenance in 5 minutes")
 //	if err != nil {
 //	    if apiErr, ok := err.(*APIError); ok {
 //	        fmt.Println(GetFriendlyErrorMessage(apiErr))
@@ -85,7 +88,7 @@ func (c *Client) ExecuteCommand(ctx context.Context, command string) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/server/command", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v2/server/command", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
@@ -377,7 +380,3 @@ func (g *group) Do(key string, fn func() (interface{}, error)) (interface{}, err
 
 	return c.val, c.err
 }
-
-
-
-

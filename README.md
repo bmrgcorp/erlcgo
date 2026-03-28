@@ -161,14 +161,15 @@ client := erlcgo.NewClient("your-server-key",
 ```go
 // Fetch multiple data arrays at once
 opts := erlcgo.ServerQueryOptions{
-    Players:     true,
-    CommandLogs: true,
-    JoinLogs:    true,
-    Vehicles:    true,
-    Staff:       true,
-    KillLogs:    true,
-    ModCalls:    true,
-    Queue:       true,
+    Players:        true,
+    CommandLogs:    true,
+    JoinLogs:       true,
+    Vehicles:       true,
+    Staff:          true,
+    KillLogs:       true,
+    ModCalls:       true,
+    EmergencyCalls: true,
+    Queue:          true,
 }
 serverData, err := client.GetServer(ctx, opts)
 
