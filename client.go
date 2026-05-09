@@ -67,7 +67,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Second * 10,
 		},
-		baseURL:     "https://api.policeroleplay.community",
+		baseURL:     "https://api.erlc.gg",
 		apiKey:      apiKey,
 		rateLimiter: NewRateLimiter(),
 		cache:       defaultCache,
