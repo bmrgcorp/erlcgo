@@ -198,10 +198,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 							}
 						}
 						if len(changes) > 0 {
-							select {
-							case sub.Events <- Event{Type: EventTypePlayers, Data: changes}:
-							default:
-							}
+							sub.Events <- Event{Type: EventTypePlayers, Data: changes}
 						}
 					}
 
@@ -215,10 +212,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 							state.commandTime = resp.CommandLogs[0].Timestamp
 							mu.Unlock()
 
-							select {
-							case sub.Events <- Event{Type: EventTypeCommands, Data: resp.CommandLogs}:
-							default:
-							}
+							sub.Events <- Event{Type: EventTypeCommands, Data: resp.CommandLogs}
 						}
 					}
 
@@ -232,10 +226,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 							state.modCallTime = resp.ModCalls[0].Timestamp
 							mu.Unlock()
 
-							select {
-							case sub.Events <- Event{Type: EventTypeModCalls, Data: resp.ModCalls}:
-							default:
-							}
+							sub.Events <- Event{Type: EventTypeModCalls, Data: resp.ModCalls}
 						}
 					}
 
@@ -249,10 +240,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 							state.killTime = resp.KillLogs[0].Timestamp
 							mu.Unlock()
 
-							select {
-							case sub.Events <- Event{Type: EventTypeKills, Data: resp.KillLogs}:
-							default:
-							}
+							sub.Events <- Event{Type: EventTypeKills, Data: resp.KillLogs}
 						}
 					}
 
@@ -266,10 +254,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 							state.joinTime = resp.JoinLogs[0].Timestamp
 							mu.Unlock()
 
-							select {
-							case sub.Events <- Event{Type: EventTypeJoins, Data: resp.JoinLogs}:
-							default:
-							}
+							sub.Events <- Event{Type: EventTypeJoins, Data: resp.JoinLogs}
 						}
 					}
 
@@ -293,10 +278,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 						}
 
 						if len(newVehicles) > 0 {
-							select {
-							case sub.Events <- Event{Type: EventTypeVehicles, Data: newVehicles}:
-							default:
-							}
+							sub.Events <- Event{Type: EventTypeVehicles, Data: newVehicles}
 						}
 					}
 
@@ -316,10 +298,7 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 						mu.Unlock()
 
 						if len(newCalls) > 0 {
-							select {
-							case sub.Events <- Event{Type: EventTypeEmergencyCalls, Data: newCalls}:
-							default:
-							}
+							sub.Events <- Event{Type: EventTypeEmergencyCalls, Data: newCalls}
 						}
 					}
 				}

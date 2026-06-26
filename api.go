@@ -153,10 +153,17 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 		}
 	}
 
-	// execute performs the HTTP request and returns the raw JSON body bytes
 	execute := func() ([]byte, error) {
+		bucket := "global"
+		if req.URL.Path == "/v2/server/command" {
+			bucket = "command"
+		}
+		if c.apiKey != "" {
+			bucket = c.apiKey + ":" + bucket
+		}
+
 		if c.rateLimiter != nil {
-			if wait, shouldWait := c.rateLimiter.ShouldWait("global"); shouldWait {
+			if wait, shouldWait := c.rateLimiter.ShouldWait(bucket); shouldWait {
 				time.Sleep(wait)
 			}
 		}
@@ -171,7 +178,6 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 
 		c.metricsMu.Lock()
 		c.metrics.TotalRequests++
-		// Simple moving average for response time
 		if c.metrics.AvgResponseTime == 0 {
 			c.metrics.AvgResponseTime = duration
 		} else {
@@ -200,11 +206,11 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 				ra = parseRetryAfterHeader(resp.Header)
 			}
 			if rl == nil || rl.Bucket == "" {
-				if bucket := parseRateLimitBucket(body); bucket != "" {
+				if rlb := parseRateLimitBucket(body); rlb != "" {
 					if rl == nil {
-						rl = &RateLimitInfo{Bucket: bucket}
+						rl = &RateLimitInfo{Bucket: rlb}
 					} else {
-						rl.Bucket = bucket
+						rl.Bucket = rlb
 					}
 				}
 			}
@@ -212,12 +218,18 @@ func (c *Client) doRequest(req *http.Request, v interface{}) error {
 
 		if c.rateLimiter != nil {
 			if rl != nil {
-				c.rateLimiter.UpdateFromHeaders("global", rl.Limit, rl.Remaining, rl.ResetAt)
+				targetBucket := rl.Bucket
+				if targetBucket == "" {
+					targetBucket = bucket
+				} else if c.apiKey != "" {
+					targetBucket = c.apiKey + ":" + targetBucket
+				}
+				c.rateLimiter.UpdateFromHeaders(targetBucket, rl.Limit, rl.Remaining, rl.ResetAt)
 			} else if resp.StatusCode == http.StatusTooManyRequests {
 				if ra != nil {
-					c.rateLimiter.UpdateFromHeaders("global", 0, 0, time.Now().Add(*ra))
+					c.rateLimiter.UpdateFromHeaders(bucket, 0, 0, time.Now().Add(*ra))
 				} else {
-					c.rateLimiter.UpdateFromHeaders("global", 0, 0, time.Now().Add(time.Second*5))
+					c.rateLimiter.UpdateFromHeaders(bucket, 0, 0, time.Now().Add(time.Second*5))
 				}
 			}
 		}
