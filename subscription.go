@@ -136,16 +136,40 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 			}
 		}
 		if opts.CommandLogs && len(resp.CommandLogs) > 0 {
-			state.commandTime = resp.CommandLogs[0].Timestamp
+			var maxTime int64
+			for _, l := range resp.CommandLogs {
+				if l.Timestamp > maxTime {
+					maxTime = l.Timestamp
+				}
+			}
+			state.commandTime = maxTime
 		}
 		if opts.ModCalls && len(resp.ModCalls) > 0 {
-			state.modCallTime = resp.ModCalls[0].Timestamp
+			var maxTime int64
+			for _, l := range resp.ModCalls {
+				if l.Timestamp > maxTime {
+					maxTime = l.Timestamp
+				}
+			}
+			state.modCallTime = maxTime
 		}
 		if opts.KillLogs && len(resp.KillLogs) > 0 {
-			state.killTime = resp.KillLogs[0].Timestamp
+			var maxTime int64
+			for _, l := range resp.KillLogs {
+				if l.Timestamp > maxTime {
+					maxTime = l.Timestamp
+				}
+			}
+			state.killTime = maxTime
 		}
 		if opts.JoinLogs && len(resp.JoinLogs) > 0 {
-			state.joinTime = resp.JoinLogs[0].Timestamp
+			var maxTime int64
+			for _, l := range resp.JoinLogs {
+				if l.Timestamp > maxTime {
+					maxTime = l.Timestamp
+				}
+			}
+			state.joinTime = maxTime
 		}
 		if opts.EmergencyCalls {
 			for _, ec := range resp.EmergencyCalls {
@@ -207,9 +231,16 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 						lastTime := state.commandTime
 						mu.RUnlock()
 
-						if resp.CommandLogs[0].Timestamp > lastTime {
+						var maxTime int64
+						for _, l := range resp.CommandLogs {
+							if l.Timestamp > maxTime {
+								maxTime = l.Timestamp
+							}
+						}
+
+						if maxTime > lastTime {
 							mu.Lock()
-							state.commandTime = resp.CommandLogs[0].Timestamp
+							state.commandTime = maxTime
 							mu.Unlock()
 
 							sub.Events <- Event{Type: EventTypeCommands, Data: resp.CommandLogs}
@@ -221,9 +252,16 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 						lastTime := state.modCallTime
 						mu.RUnlock()
 
-						if resp.ModCalls[0].Timestamp > lastTime {
+						var maxTime int64
+						for _, l := range resp.ModCalls {
+							if l.Timestamp > maxTime {
+								maxTime = l.Timestamp
+							}
+						}
+
+						if maxTime > lastTime {
 							mu.Lock()
-							state.modCallTime = resp.ModCalls[0].Timestamp
+							state.modCallTime = maxTime
 							mu.Unlock()
 
 							sub.Events <- Event{Type: EventTypeModCalls, Data: resp.ModCalls}
@@ -235,9 +273,16 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 						lastTime := state.killTime
 						mu.RUnlock()
 
-						if resp.KillLogs[0].Timestamp > lastTime {
+						var maxTime int64
+						for _, l := range resp.KillLogs {
+							if l.Timestamp > maxTime {
+								maxTime = l.Timestamp
+							}
+						}
+
+						if maxTime > lastTime {
 							mu.Lock()
-							state.killTime = resp.KillLogs[0].Timestamp
+							state.killTime = maxTime
 							mu.Unlock()
 
 							sub.Events <- Event{Type: EventTypeKills, Data: resp.KillLogs}
@@ -249,9 +294,16 @@ func (c *Client) SubscribeWithConfig(ctx context.Context, config *EventConfig, t
 						lastTime := state.joinTime
 						mu.RUnlock()
 
-						if resp.JoinLogs[0].Timestamp > lastTime {
+						var maxTime int64
+						for _, l := range resp.JoinLogs {
+							if l.Timestamp > maxTime {
+								maxTime = l.Timestamp
+							}
+						}
+
+						if maxTime > lastTime {
 							mu.Lock()
-							state.joinTime = resp.JoinLogs[0].Timestamp
+							state.joinTime = maxTime
 							mu.Unlock()
 
 							sub.Events <- Event{Type: EventTypeJoins, Data: resp.JoinLogs}
