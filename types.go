@@ -23,8 +23,9 @@ type ERLCServerPlayer struct {
 	Callsign    string       `json:"Callsign"`
 	Team        string       `json:"Team"`
 	Location    ERLCLocation `json:"Location"`
-	WantedStars int          `json:"WantedStars"`
+	WantedStars float64      `json:"WantedStars"`
 }
+
 
 // ClientMetrics tracks performance and health data for the client.
 type ClientMetrics struct {
