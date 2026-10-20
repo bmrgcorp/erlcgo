@@ -1,6 +1,8 @@
 package erlcgo
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -39,9 +41,31 @@ type ClientMetrics struct {
 
 // ERLCStaff contains mapping lists for the current staff in the server.
 type ERLCStaff struct {
-	Admins  map[string]string `json:"Admins"`
-	Mods    map[string]string `json:"Mods"`
-	Helpers map[string]string `json:"Helpers"`
+	Admins  ERLCStaffMap `json:"Admins"`
+	Mods    ERLCStaffMap `json:"Mods"`
+	Helpers ERLCStaffMap `json:"Helpers"`
+}
+
+type ERLCStaffMap map[string]string
+
+func (m *ERLCStaffMap) UnmarshalJSON(data []byte) error {
+	if trimmed := bytes.TrimSpace(data); len(trimmed) > 0 && trimmed[0] == '[' {
+		var list []json.RawMessage
+		if err := json.Unmarshal(trimmed, &list); err != nil {
+			return err
+		}
+		if len(list) > 0 {
+			return fmt.Errorf("erlcgo: expected staff object, got array of %d", len(list))
+		}
+		*m = ERLCStaffMap{}
+		return nil
+	}
+	var parsed map[string]string
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*m = parsed
+	return nil
 }
 
 // ERLCServerResponse represents the full payload returned from the /v2/server endpoint.
